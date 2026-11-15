@@ -107,7 +107,7 @@
         <button onclick="document.getElementById('gpx-file-input').click()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Load GPX">
             <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
         </button>
-        <input type="file" id="gpx-file-input" accept=".gpx" class="hidden" onchange="handleFileSelect(event)">
+        <input type="file" id="gpx-file-input" accept=".gpx" multiple class="hidden" onchange="handleFileSelect(event)">
 
         <button onclick="openLibraryModal()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Library">
             <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
@@ -717,31 +717,54 @@
             reader.readAsText(file);
         }
 
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (!file) { event.target.value = ''; return; }
-            
-            showToast("파일을 읽는 중...");
-            const reader = new FileReader();
-            reader.onload = async function(e) {
+        // GPX 파일을 1개 또는 여러 개 선택해서 올린다.
+        // 여러 개를 고르면 하나씩 서버에 저장하고(같은 이름이 이미 있으면 건너뜀) 결과를 요약해서 알려준다.
+        async function handleFileSelect(event) {
+            const files = Array.from(event.target.files || []);
+            event.target.value = '';
+            if (files.length === 0) return;
+
+            let existing = new Set();
+            if (files.length > 1) {
+                try { existing = new Set((await getAllRoutesFromDB(true)).map(r => r.name)); }
+                catch (e) { showToast("오류: " + e.message); return; }
+            }
+
+            let saved = 0, skipped = 0;
+            const failed = [];
+            let lastSaved = null;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (files.length > 1 && existing.has(file.name)) { skipped++; continue; }
+                showToast(files.length > 1 ? `올리는 중... (${i + 1}/${files.length}) ${file.name}` : "파일을 읽는 중...");
                 try {
-                    const xmlDoc = new DOMParser().parseFromString(e.target.result, "text/xml");
+                    const text = await file.text();
+                    const xmlDoc = new DOMParser().parseFromString(text, "text/xml");
                     if (xmlDoc.getElementsByTagName("parsererror").length > 0) throw new Error("잘못된 GPX 형식");
-                    
+
                     const parsed = parseGPX(xmlDoc, file.name);
                     if (parsed.points.length === 0) throw new Error("유효한 트랙 데이터가 없습니다.");
-                    
-                    showToast("서버에 저장하는 중...");
+
+                    if (files.length === 1) showToast("서버에 저장하는 중...");
                     parsed.id = await saveRouteToDB(parsed);
-                    showToast(`"${file.name}" 저장 및 로드 완료!`);
-                    displayRoute(parsed);
+                    existing.add(file.name);
+                    saved++;
+                    lastSaved = parsed;
                 } catch (error) {
-                    showToast("오류: " + error.message);
-                } finally {
-                    event.target.value = ''; 
+                    failed.push(file.name);
+                    if (files.length === 1) { showToast("오류: " + error.message); return; }
                 }
-            };
-            reader.readAsText(file);
+            }
+
+            if (files.length === 1) {
+                if (lastSaved) { showToast(`"${lastSaved.name}" 저장 및 로드 완료!`); displayRoute(lastSaved); }
+                return;
+            }
+            let msg = `업로드 완료: ${saved}개 저장`;
+            if (skipped) msg += `, ${skipped}개는 같은 이름이 있어 건너뜀`;
+            if (failed.length) msg += `, ${failed.length}개 실패(${failed.slice(0, 2).join(', ')}${failed.length > 2 ? ' 외' : ''})`;
+            showToast(msg);
+            routesCache = null;
         }
 
         function parseGPX(xmlDoc, fileName) {
