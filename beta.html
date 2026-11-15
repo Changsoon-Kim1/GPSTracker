@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GPX Tracker</title>
+    
+    <!-- PWA Manifest & Theme Color -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#111827">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        body, html { 
+            margin: 0; padding: 0; 
+            width: 100%; height: 100dvh; 
+            overflow: hidden; 
+            background-color: #111827; 
+            touch-action: manipulation; 
+        }
+        .toast-show { opacity: 1; transform: translate(-50%, 0); }
+        .toast-hide { opacity: 0; transform: translate(-50%, 20px); pointer-events: none; }
+        
+        /* 툴팁(구름창) 다크 모드 스타일 */
+        .leaflet-tooltip.gpx-tooltip {
+            background-color: rgba(17, 24, 39, 0.9);
+            border: 1px solid #374151;
+            color: #f3f4f6;
+            border-radius: 0.5rem;
+            backdrop-filter: blur(4px);
+            padding: 8px 12px;
+            font-family: sans-serif;
+            white-space: nowrap;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+        .leaflet-tooltip.gpx-tooltip::before {
+            display: none; 
+        }
+
+        /* 말풍선(휴식/경로 선택) 다크 스타일 */
+        .rest-popup .leaflet-popup-content-wrapper,
+        .route-popup .leaflet-popup-content-wrapper {
+            background-color: rgba(17, 24, 39, 0.95);
+            color: #f3f4f6;
+            border: 1px solid #374151;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+        .rest-popup .leaflet-popup-content,
+        .route-popup .leaflet-popup-content { margin: 8px 12px; font-family: sans-serif; }
+        .rest-popup .leaflet-popup-tip,
+        .route-popup .leaflet-popup-tip { background-color: rgba(17, 24, 39, 0.95); }
+        .rest-popup a.leaflet-popup-close-button,
+        .route-popup a.leaflet-popup-close-button { display: none; }
+
+        /* 경로를 탭했을 때 생기는 사각형 포커스 테두리 제거 */
+        .leaflet-container .leaflet-interactive:focus,
+        .leaflet-container path:focus,
+        .leaflet-container svg:focus { outline: none; }
+        .leaflet-container { -webkit-tap-highlight-color: transparent; }
+
+        /* 줌 아웃 시 웨이포인트/마커 라벨 숨김 처리 */
+        .hide-wp-label .wp-label-text { 
+            opacity: 0; 
+            transform: scale(0.8);
+            pointer-events: none; 
+        }
+    </style>
+</head>
+<body class="flex flex-col h-[100dvh] text-gray-100 relative">
+
+    <!-- 지도 영역 -->
+    <div id="map" class="flex-1 w-full relative z-0"></div>
+
+    <!-- 그래프 영역 -->
+    <div id="graph-container" class="w-full h-[25%] hidden flex-col bg-gray-800 border-t border-gray-700 z-10 shrink-0">
+        <div class="flex justify-between items-center px-3 h-[28px] shrink-0 bg-gray-900 text-[11px] text-gray-400 border-b border-gray-800">
+            <span class="font-mono">고도 / 속도 프로파일 (길게 누르면 구간 분석)</span>
+            <label class="flex items-center space-x-1 cursor-pointer">
+                <input type="checkbox" id="speed-toggle" class="rounded text-blue-500 focus:ring-0 w-3 h-3" onchange="drawGraph(currentScrubDist)">
+                <span class="text-gray-300">속도 표시</span>
+            </label>
+        </div>
+        <div class="flex-1 relative w-full" id="canvas-wrapper">
+            <canvas id="profile-canvas" class="absolute inset-0 w-full h-full block cursor-pointer"></canvas>
+        </div>
+    </div>
+
+    <!-- 구간 통계 정보 패널 -->
+    <div id="section-stats-panel" class="absolute top-16 left-1/2 -translate-x-1/2 bg-gray-900/95 text-white px-5 py-3 rounded-2xl shadow-2xl border border-gray-700 backdrop-blur-sm z-[1000] hidden flex-col items-center text-sm space-y-2 min-w-[250px]">
+        <button onclick="resetSectionAnalysis()" class="absolute top-1.5 right-1.5 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-gray-700 active:scale-95 transition text-2xl leading-none" title="닫기" aria-label="닫기">&times;</button>
+        <div class="font-bold text-blue-400 text-base">구간 분석 결과</div>
+        <div id="section-stats-content" class="text-center"></div>
+        <div class="text-[11px] text-gray-400 mt-1 bg-gray-800 px-3 py-1 rounded-full">✕ 버튼 또는 화면을 길게 누르면 초기화됩니다.</div>
+    </div>
+
+    <!-- 좌측 상단 플로팅 버튼 -->
+    <div class="absolute top-3 left-3 flex flex-col space-y-3 z-[1000]">
+        <button onclick="document.getElementById('gpx-file-input').click()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Load GPX">
+            <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+        </button>
+        <input type="file" id="gpx-file-input" accept=".gpx" class="hidden" onchange="handleFileSelect(event)">
+
+        <button onclick="openLibraryModal()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Library">
+            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+        </button>
+
+        <button onclick="showAllRoutes()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Show All Route">
+            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </button>
+    </div>
+
+    <!-- 우측 상단 플로팅 버튼 컨테이너 -->
+    <div id="top-right-wrapper" class="absolute top-3 right-3 z-[1000] flex flex-col gap-3">
+        <div id="top-right-controls" class="hidden flex-col space-y-3">
+        <button onclick="openDetailModal()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Detail Info">
+            <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+        </button>
+        <button onclick="openWaypointModal()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Way Point 추가">
+            <svg class="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21c-4.477-7-8-10.5-8-13A8 8 0 1120 8c0 2.5-3.523 6-8 13z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10h6m-3-3v6"></path></svg>
+        </button>
+        </div>
+
+        <!-- 지도 확대/축소 버튼 -->
+        <div id="zoom-controls" class="flex flex-col space-y-3">
+            <button onclick="map.zoomIn()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Zoom In">
+                <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14m-7-7h14"></path></svg>
+            </button>
+            <button onclick="map.zoomOut()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Zoom Out">
+                <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14"></path></svg>
+            </button>
+            <button onclick="cycleBaseMap()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="지도 종류 바꾸기">
+                <svg class="w-5 h-5 text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l9 5-9 5-9-5 9-5zm-9 9l9 5 9-5m-18 4l9 5 9-5"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- 모달: 라이브러리 -->
+    <div id="library-modal" class="fixed inset-0 bg-black/70 z-[2000] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-gray-900 border border-gray-700 w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center px-5 py-4 border-b border-gray-800">
+                <h3 class="font-bold text-lg text-white">GPX 라이브러리</h3>
+                <button onclick="closeLibraryModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            
+            <div class="px-5 py-3 bg-gray-800 border-b border-gray-700">
+                <div class="relative">
+                    <input type="text" id="library-search" placeholder="경로 이름 검색..." class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition" onkeyup="filterLibrary()">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+
+            <div class="flex px-5 py-2.5 bg-gray-800 border-b border-gray-800 space-x-2 text-xs">
+                <button onclick="backupLibraryData()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg font-medium transition">데이터 백업</button>
+                <button onclick="document.getElementById('restore-file-input').click()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium transition">데이터 복원</button>
+                <button onclick="if (confirm('로그아웃할까요?')) logout()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium transition">로그아웃</button>
+                <input type="file" id="restore-file-input" accept=".json" class="hidden" onchange="restoreLibraryData(event)">
+            </div>
+            <div id="library-list-content" class="p-5 overflow-y-auto space-y-4 flex-1"></div>
+        </div>
+    </div>
+
+    <!-- 모달: 로그인 (서버 DB 접속) -->
+    <div id="login-modal" class="fixed inset-0 bg-black/85 z-[3000] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-gray-900 border border-gray-700 w-full max-w-sm max-h-[90dvh] rounded-2xl shadow-2xl flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-800 shrink-0"><h3 class="font-bold text-lg text-white">GPX Tracker 로그인</h3></div>
+            <div class="p-5 space-y-3 text-sm overflow-y-auto min-h-0">
+                <div class="text-xs text-gray-400 leading-snug">경로와 기록은 서버(Supabase)에 저장됩니다. 로그인하면 PC와 휴대폰에서 같은 데이터를 봅니다. 인터넷 연결이 필요합니다.</div>
+                <div id="login-config-box" class="space-y-2">
+                    <label class="block text-xs text-gray-400">프로젝트 주소 (Project URL)
+                        <input id="login-url" type="url" placeholder="https://xxxx.supabase.co" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
+                    </label>
+                    <label class="block text-xs text-gray-400">anon public 키
+                        <input id="login-anon" type="text" placeholder="eyJ... 또는 sb_publishable_..." class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
+                    </label>
+                </div>
+                <label class="block text-xs text-gray-400">이메일
+                    <input id="login-email" type="email" autocomplete="username" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
+                </label>
+                <label class="block text-xs text-gray-400">비밀번호
+                    <input id="login-password" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFromUI()" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
+                </label>
+                <button onclick="loginFromUI()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-bold active:scale-95 transition">로그인</button>
+                <div id="login-status" class="text-xs text-amber-300 break-words min-h-[1rem]"></div>
+                <div class="text-[10px] text-gray-500 leading-snug">비밀번호는 저장하지 않고, 로그인 정보(토큰)만 이 기기에 보관합니다.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달: 디테일 -->
+    <div id="detail-modal" class="fixed inset-0 bg-black/70 z-[2000] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-gray-900 border border-gray-700 w-full max-w-sm max-h-[90dvh] rounded-2xl shadow-2xl flex flex-col">
+            <div class="flex justify-between items-center px-5 py-4 border-b border-gray-800 shrink-0">
+                <h3 class="font-bold text-lg text-white">경로 상세 통계</h3>
+                <button onclick="closeDetailModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div id="detail-content" class="p-5 space-y-3 text-sm overflow-y-auto min-h-0"></div>
+        </div>
+    </div>
+    
+    <!-- 모달: 웨이포인트 추가 -->
+    <div id="waypoint-modal" class="fixed inset-0 bg-black/70 z-[2000] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-gray-900 border border-gray-700 w-full max-w-xs rounded-2xl shadow-2xl flex flex-col">
+            <div class="flex justify-between items-center px-5 py-4 border-b border-gray-800">
+                <h3 class="font-bold text-lg text-white">웨이포인트 이름 설정</h3>
+            </div>
+            <div class="p-5 space-y-4">
+                <input type="text" id="waypoint-name-input" placeholder="예: 대청봉, 샘터" class="w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-pink-500 transition">
+                <div class="flex space-x-2">
+                    <button onclick="closeWaypointModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium transition text-sm">취소</button>
+                    <button onclick="confirmAddWaypoint()" class="flex-1 bg-pink-600 hover:bg-pink-500 text-white py-2 rounded-lg font-medium transition text-sm">저장하기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 토스트 메시지 -->
+    <div id="toast" class="fixed bottom-10 left-1/2 bg-gray-800/95 text-white px-5 py-2.5 rounded-full shadow-2xl z-[9999] transition-all duration-300 toast-hide border border-gray-700 text-sm font-medium backdrop-blur-sm whitespace-nowrap"></div>
+
+    <script>
+        const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
+
+        // ===== 지도 종류 =====
+        // 기본은 OpenStreetMap 공식 지도. 공식 서버가 접속을 차단(403)하면 자동으로 대체 서버로 바꾼다.
+        // (OSM 공식 타일 서버는 웹 주소(Referer)가 없는 요청 - 로컬 파일로 연 HTML 등 - 을 차단할 수 있다.)
+        // 오른쪽 '지도' 버튼으로 직접 바꿀 수도 있다. API 키가 필요한 지도(CARTO 등)는 쓰지 않는다.
+        const BASEMAPS = [
+            { key: 'osm', name: 'OpenStreetMap', fallback: 'osmde',
+              url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              opts: { maxZoom: 19, attribution: '© OpenStreetMap contributors' } },
+            { key: 'osmde', name: 'OpenStreetMap (대체 서버)',
+              url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+              opts: { maxNativeZoom: 18, maxZoom: 19, attribution: '© OpenStreetMap contributors' } },
+            { key: 'topo', name: 'OpenTopoMap (등고선)',
+              url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+              opts: { subdomains: 'abc', maxNativeZoom: 17, maxZoom: 19, attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)' } },
+            { key: 'sat', name: '위성 (Esri)',
+              url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+              opts: { maxNativeZoom: 18, maxZoom: 19, attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community' } }
+        ];
+        let baseLayer = null, baseIdx = 0, tileOk = 0, tileErr = 0, tileWarned = false;
+
+        // persist=false: 자동 전환처럼 "임시로" 바꾸는 경우 (다음 실행 때는 선택해 둔 지도를 다시 시도)
+        function setBaseMap(idx, announce, persist) {
+            if (baseLayer) map.removeLayer(baseLayer);
+            baseIdx = idx;
+            const b = BASEMAPS[idx];
+            tileOk = 0; tileErr = 0; tileWarned = false;
+            baseLayer = L.tileLayer(b.url, Object.assign({}, b.opts));
+            baseLayer.on('tileload', () => { tileOk++; });
+            baseLayer.on('tileerror', () => {
+                tileErr++;
+                if (tileOk === 0 && tileErr >= 6 && !tileWarned) {
+                    tileWarned = true;
+                    const fbIdx = b.fallback ? BASEMAPS.findIndex(x => x.key === b.fallback) : -1;
+                    if (fbIdx >= 0) {
+                        showToast(`${b.name} 접속이 차단되어 ${BASEMAPS[fbIdx].name}로 전환합니다.`);
+                        setBaseMap(fbIdx, false, false);
+                    } else {
+                        showToast('지도를 불러오지 못했습니다. 오른쪽 지도 버튼으로 다른 지도를 선택해 보세요.');
+                    }
+                }
+            });
+            baseLayer.addTo(map);
+            baseLayer.bringToBack();
+            if (persist !== false) { try { localStorage.setItem('gpx_basemap', b.key); } catch (e) {} }
+            if (announce) showToast('지도: ' + b.name);
+        }
+        function cycleBaseMap() { setBaseMap((baseIdx + 1) % BASEMAPS.length, true, true); }
+
+        (function initBaseMap() {
+            let key = null;
+            try { key = localStorage.getItem('gpx_basemap'); } catch (e) {}
+            const i = BASEMAPS.findIndex(b => b.key === key);
+            setBaseMap(i >= 0 ? i : 0, false, true);
+        })();
+
+        let currentRouteLayer = null;
+        let allRoutesLayerGroup = L.layerGroup().addTo(map);
+        let waypointLayerGroup = L.layerGroup().addTo(map);
+        
+        let sectionLayerGroup = L.layerGroup().addTo(map);
+        let steepMarkersLayerGroup = L.layerGroup().addTo(map);
+        let restMarkersLayerGroup = L.layerGroup().addTo(map);
+
+        // 전체 경로 보기: 캔버스 렌더러(터치 허용 범위 12px) + 선택 상태
+        const allRoutesRenderer = L.canvas({ tolerance: 12, padding: 0.5 });
+        const ROUTE_STYLE = { color: '#3b82f6', weight: 3, opacity: 0.8 };
+        const ROUTE_SELECTED_STYLE = { color: '#facc15', weight: 8, opacity: 1 };
+        const routePopup = L.popup({ autoPan: false, closeButton: false, className: 'route-popup', offset: [0, -4], maxWidth: 260 });
+        let selectedRouteLine = null;
+
+        function clearRouteHighlight() {
+            if (selectedRouteLine) {
+                try { selectedRouteLine.setStyle(ROUTE_STYLE); } catch (e) {}
+                selectedRouteLine = null;
+            }
+        }
+        function selectRouteInAllView(route, line, latlng) {
+            clearRouteHighlight();
+            const box = document.createElement('div');
+            const nameBtn = document.createElement('button');
+            nameBtn.type = 'button';
+            nameBtn.className = 'font-bold text-[13px] text-sky-300 underline underline-offset-2 text-left break-all active:opacity-60';
+            nameBtn.textContent = route.name + ' ›';
+            nameBtn.addEventListener('click', () => { map.closePopup(); openRouteById(route.id); });
+            const info = document.createElement('div');
+            info.className = 'text-[11px] text-gray-300 mt-1';
+            info.textContent = `거리: ${(route.totalDist / 1000).toFixed(2)} km`;
+            const hint = document.createElement('div');
+            hint.className = 'text-[10px] text-gray-500 mt-0.5';
+            hint.textContent = '이름을 누르면 경로가 열립니다';
+            box.append(nameBtn, info, hint);
+
+            routePopup.setLatLng(latlng).setContent(box).openOn(map);
+            // openOn 이 이전 말풍선을 닫으며 하이라이트를 지우므로, 열린 뒤에 강조한다
+            selectedRouteLine = line;
+            line.setStyle(ROUTE_SELECTED_STYLE);
+            line.bringToFront();
+        }
+        
+        let scrubberMarker = null;
+        let currentRouteData = null;
+        let currentScrubDist = -1;
+        let isShowAllMode = false;
+        
+        let sectionState = 0; 
+        let startPt = null;
+        let endPt = null;
+
+        const canvas = document.getElementById('profile-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            if (canvas.offsetWidth === 0) return;
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            if (currentRouteData) drawGraph(currentScrubDist);
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.remove('toast-hide'); 
+            toast.classList.add('toast-show');
+            setTimeout(() => { 
+                toast.classList.remove('toast-show'); 
+                toast.classList.add('toast-hide'); 
+            }, 3000);
+        }
+
+        // =====================================================================
+        //  서버(Supabase) 단일 DB
+        //  * 이 기기에는 데이터를 저장하지 않는다. 경로/웨이포인트/나의 기록은 모두 서버에 있다.
+        //  * 로그인 정보(토큰)만 이 기기에 보관한다. 비밀번호는 저장하지 않는다.
+        //  * 경로 목록은 가벼운 정보(이름, 거리, 요약선)만 불러오고, 점 데이터는 경로를 열 때 받는다.
+        // =====================================================================
+        // 프로젝트 주소/공개키(anon)를 여기에 넣어 두면 기기마다 다시 입력하지 않아도 된다.
+        // anon 키는 공개되어도 되는 키이며, 데이터는 서버의 접근 규칙(RLS)으로 보호된다.
+        const SUPABASE_URL = '';
+        const SUPABASE_ANON_KEY = '';
+
+        const CFG_KEY = 'gpx_supabase_cfg';
+        const SES_KEY = 'gpx_supabase_session';
+        const OVERVIEW_MAX_POINTS = 400;
+        let routesCache = null;       // 목록 캐시(점 데이터 없음)
+        let appStarted = false;
+
+        function getCfg() {
+            if (SUPABASE_URL && SUPABASE_ANON_KEY) return { url: SUPABASE_URL.replace(/\/+$/, ''), anonKey: SUPABASE_ANON_KEY };
+            try { return JSON.parse(localStorage.getItem(CFG_KEY)) || null; } catch (e) { return null; }
+        }
+        function getSession() { try { return JSON.parse(localStorage.getItem(SES_KEY)) || null; } catch (e) { return null; } }
+        function isLoggedIn() { const c = getCfg(), ses = getSession(); return !!(c && c.url && c.anonKey && ses && ses.refresh_token); }
+
+        function jwtUserId(token) {
+            try {
+                const b = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+                return JSON.parse(atob(b + '='.repeat((4 - b.length % 4) % 4))).sub || null;
+            } catch (e) { return null; }
+        }
+        function storeSession(j, prev) {
+            const ses = {
+                access_token: j.access_token,
+                refresh_token: j.refresh_token,
+                expires_at: Date.now() + (j.expires_in || 3600) * 1000,
+                user_id: (j.user && j.user.id) || jwtUserId(j.access_token) || (prev && prev.user_id) || null,
+                email: (j.user && j.user.email) || (prev && prev.email) || ''
+            };
+            localStorage.setItem(SES_KEY, JSON.stringify(ses));
+            return ses;
+        }
+        async function authRequest(url, anonKey, grant, body) {
+            let res;
+            try {
+                res = await fetch(`${url}/auth/v1/token?grant_type=${grant}`, {
+                    method: 'POST',
+                    headers: { 'apikey': anonKey, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            } catch (e) { throw new Error('서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.'); }
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(j.error_description || j.msg || j.message || `인증 실패 (${res.status})`);
+            return j;
+        }
+        async function getFreshSession() {
+            const cfg = getCfg(), ses = getSession();
+            if (!cfg || !ses) throw new Error('로그인이 필요합니다.');
+            if (ses.expires_at - Date.now() > 60000) return ses;
+            try {
+                const j = await authRequest(cfg.url, cfg.anonKey, 'refresh_token', { refresh_token: ses.refresh_token });
+                return storeSession(j, ses);
+            } catch (e) {
+                if (/연결할 수 없습니다/.test(e.message)) throw e;
+                localStorage.removeItem(SES_KEY);
+                showLoginModal('로그인이 만료되었습니다. 다시 로그인해 주세요.');
+                throw new Error('로그인이 만료되었습니다.');
+            }
+        }
+
+        async function sbFetch(path, opts) {
+            opts = opts || {};
+            const cfg = getCfg();
+            const ses = await getFreshSession();
+            let res;
+            try {
+                res = await fetch(`${cfg.url}/rest/v1/${path}`, {
+                    method: opts.method || 'GET',
+                    body: opts.body,
+                    headers: Object.assign({
+                        'apikey': cfg.anonKey,
+                        'Authorization': 'Bearer ' + ses.access_token,
+                        'Content-Type': 'application/json'
+                    }, opts.headers || {})
+                });
+            } catch (e) { throw new Error('서버에 연결할 수 없습니다. 인터넷 연결이 필요합니다.'); }
+            if (!res.ok) {
+                const t = await res.text().catch(() => '');
+                throw new Error(`서버 오류 ${res.status} ${t.slice(0, 150)}`);
+            }
+            return res;
+        }
+
+        // ---- 점 데이터 압축 (gzip -> base64). 압축을 지원하지 않는 브라우저는 그대로 저장 ----
+        async function encodePoints(str) {
+            if (typeof CompressionStream === 'undefined') return 'j:' + str;
+            const cs = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
+            const buf = new Uint8Array(await new Response(cs).arrayBuffer());
+            let bin = '';
+            for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+            return 'g:' + btoa(bin);
+        }
+        async function decodePoints(p) {
+            if (p.startsWith('j:')) return p.slice(2);
+            const bin = atob(p.slice(2));
+            const buf = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+            const ds = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+            return await new Response(ds).text();
+        }
+
+        // 전체 경로 보기용 요약선 (최대 400점)
+        function makeOverview(points) {
+            if (!points || points.length === 0) return [];
+            const step = Math.max(1, Math.ceil(points.length / OVERVIEW_MAX_POINTS));
+            const out = [];
+            for (let i = 0; i < points.length; i += step) out.push([+points[i].lat.toFixed(5), +points[i].lon.toFixed(5)]);
+            const last = points[points.length - 1];
+            out.push([+last.lat.toFixed(5), +last.lon.toFixed(5)]);
+            return out;
+        }
+
+        const ROUTE_LIST_COLS = 'id,name,year,total_dist,total_ascent,total_descent,overview,user_log,updated_at';
+        function rowToListRoute(r) {
+            return {
+                id: Number(r.id), name: r.name, year: r.year || 'Unknown',
+                totalDist: Number(r.total_dist) || 0, totalAscent: Number(r.total_ascent) || 0, totalDescent: Number(r.total_descent) || 0,
+                overview: r.overview || [], userLog: r.user_log || undefined, updatedAt: Number(r.updated_at) || 0
+            };
+        }
+
+        // ---- 경로 ----
+        async function getAllRoutesFromDB(force) {
+            if (routesCache && !force) return routesCache;
+            const out = [], PAGE = 500;
+            for (let off = 0; ; off += PAGE) {
+                const res = await sbFetch(`gpx_tracks?select=${ROUTE_LIST_COLS}&order=id.desc&limit=${PAGE}&offset=${off}`);
+                const rows = await res.json();
+                out.push(...rows.map(rowToListRoute));
+                if (rows.length < PAGE) break;
+            }
+            routesCache = out;
+            return out;
+        }
+
+        // 점 데이터까지 포함한 경로 1개 (경로를 열 때 사용)
+        async function getRouteFromDB(id) {
+            const res = await sbFetch(`gpx_tracks?id=eq.${id}&select=${ROUTE_LIST_COLS},points`);
+            const rows = await res.json();
+            if (!rows.length) return null;
+            const rec = rowToListRoute(rows[0]);
+            rec.points = JSON.parse(await decodePoints(rows[0].points));
+            return rec;
+        }
+
+        async function saveRouteToDB(routeObj) {
+            const ses = await getFreshSession();
+            const id = routeObj.id || (Date.now() + Math.floor(Math.random() * 1000));
+            const pts = routeObj.points || [];
+            const row = {
+                user_id: ses.user_id, id: id,
+                name: routeObj.name, year: routeObj.year || 'Unknown',
+                total_dist: routeObj.totalDist || 0, total_ascent: routeObj.totalAscent || 0, total_descent: routeObj.totalDescent || 0,
+                overview: makeOverview(pts),
+                user_log: routeObj.userLog || null,
+                points: await encodePoints(JSON.stringify(pts)),
+                updated_at: Date.now()
+            };
+            await sbFetch('gpx_tracks?on_conflict=user_id,id', {
+                method: 'POST',
+                headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify(row)
+            });
+            routesCache = null;
+            return id;
+        }
+
+        // '나의 기록'만 저장 (점 데이터는 다시 올리지 않는다)
+        async function saveRouteUserLogToDB(id, log) {
+            await sbFetch(`gpx_tracks?id=eq.${id}`, {
+                method: 'PATCH',
+                headers: { 'Prefer': 'return=minimal' },
+                body: JSON.stringify({ user_log: log, updated_at: Date.now() })
+            });
+            if (routesCache) { const r = routesCache.find(x => x.id === id); if (r) r.userLog = log; }
+        }
+
+        async function deleteRouteFromDB(id) {
+            await sbFetch(`gpx_tracks?id=eq.${id}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+            routesCache = null;
+        }
+
+        // ---- 웨이포인트 ----
+        async function getAllWaypointsFromDB() {
+            const res = await sbFetch('gpx_waypoints2?select=id,name,lat,lon&order=id.asc&limit=5000');
+            const rows = await res.json();
+            return rows.map(r => ({ id: Number(r.id), name: r.name, lat: Number(r.lat), lon: Number(r.lon) }));
+        }
+        async function saveWaypointToDB(wp) {
+            const ses = await getFreshSession();
+            const id = wp.id || (Date.now() + Math.floor(Math.random() * 1000));
+            await sbFetch('gpx_waypoints2?on_conflict=user_id,id', {
+                method: 'POST',
+                headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify({ user_id: ses.user_id, id: id, name: wp.name, lat: wp.lat, lon: wp.lon, updated_at: Date.now() })
+            });
+            return id;
+        }
+        async function deleteWaypointFromDB(id) {
+            await sbFetch(`gpx_waypoints2?id=eq.${id}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+        }
+
+        async function loadAndRenderAllWaypoints() {
+            waypointLayerGroup.clearLayers();
+            try {
+                const waypoints = await getAllWaypointsFromDB();
+                waypoints.forEach(wp => renderWaypoint(wp));
+            } catch(e) {
+                console.error("웨이포인트 로드 실패", e);
+            }
+        }
+
+        // ---- 경로를 열 때: 목록 항목(점 없음) -> 서버에서 전체 데이터를 받아 표시 ----
+        async function openRouteById(id) {
+            try {
+                showToast('경로를 불러오는 중...');
+                const full = await getRouteFromDB(id);
+                if (!full) { showToast('경로를 찾을 수 없습니다. (다른 기기에서 삭제되었을 수 있습니다)'); routesCache = null; return; }
+                displayRoute(full);
+            } catch (e) {
+                showToast('경로 불러오기 실패: ' + (e && e.message ? e.message : e));
+            }
+        }
+
+        // ---- 로그인 화면 ----
+        function setLoginStatus(msg) { const el = document.getElementById('login-status'); if (el) el.textContent = msg || ''; }
+        function showLoginModal(msg) {
+            const cfg = getCfg();
+            const fixed = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+            document.getElementById('login-config-box').classList.toggle('hidden', fixed);
+            document.getElementById('login-url').value = cfg ? cfg.url : '';
+            document.getElementById('login-anon').value = cfg ? cfg.anonKey : '';
+            document.getElementById('login-password').value = '';
+            setLoginStatus(msg || '');
+            document.getElementById('login-modal').classList.remove('hidden');
+        }
+        function hideLoginModal() { document.getElementById('login-modal').classList.add('hidden'); }
+
+        async function loginFromUI() {
+            const fixed = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+            const url = (fixed ? SUPABASE_URL : document.getElementById('login-url').value).trim().replace(/\/+$/, '');
+            const anon = (fixed ? SUPABASE_ANON_KEY : document.getElementById('login-anon').value).trim();
+            const email = document.getElementById('login-email').value.trim();
+            const pw = document.getElementById('login-password').value;
+            if (!url || !anon || !email || !pw) { setLoginStatus('주소, 키, 이메일, 비밀번호를 모두 입력해 주세요.'); return; }
+            try {
+                setLoginStatus('로그인 중...');
+                const j = await authRequest(url, anon, 'password', { email, password: pw });
+                if (!fixed) localStorage.setItem(CFG_KEY, JSON.stringify({ url, anonKey: anon }));
+                storeSession(j, null);
+                document.getElementById('login-password').value = '';
+                hideLoginModal();
+                routesCache = null;
+                await startApp();
+            } catch (e) {
+                setLoginStatus('로그인 실패: ' + (e && e.message ? e.message : e));
+            }
+        }
+        function logout() {
+            localStorage.removeItem(SES_KEY);
+            localStorage.removeItem('lastViewedRouteId');
+            routesCache = null;
+            location.reload();
+        }
+
+        // ---- 앱 시작 ----
+        async function startApp() {
+            if (appStarted) return;
+            appStarted = true;
+            try {
+                await loadAndRenderAllWaypoints();
+                handleMapZoom();
+                const lastId = localStorage.getItem('lastViewedRouteId');
+                if (lastId) await openRouteById(parseInt(lastId));
+            } catch (e) {
+                appStarted = false;
+                showToast('불러오기 실패: ' + (e && e.message ? e.message : e));
+            }
+        }
+
+        async function backupLibraryData() {
+            try {
+                const list = await getAllRoutesFromDB(true);
+                const waypoints = await getAllWaypointsFromDB();
+                if (list.length === 0 && waypoints.length === 0) {
+                    showToast("백업할 데이터가 없습니다.");
+                    return;
+                }
+                const routes = [];
+                for (let i = 0; i < list.length; i++) {
+                    showToast(`백업 준비 중... (${i + 1}/${list.length})`);
+                    const full = await getRouteFromDB(list[i].id);
+                    if (full) { delete full.overview; routes.push(full); }
+                }
+                const backupData = { routes, waypoints };
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `gpx_backup_${new Date().toISOString().slice(0,10)}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+                showToast("백업 파일이 생성되었습니다.");
+            } catch (e) {
+                showToast("백업 실패: " + e.message);
+            }
+        }
+
+        async function restoreLibraryData(event) {
+            const file = event.target.files[0];
+            if (!file) { event.target.value = ''; return; }
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    let importedRoutes = [];
+                    let importedWaypoints = [];
+
+                    if (Array.isArray(parsed)) {
+                        importedRoutes = parsed;
+                    } else {
+                        importedRoutes = parsed.routes || [];
+                        importedWaypoints = parsed.waypoints || [];
+                    }
+
+                    let n = 0;
+                    for (let rt of importedRoutes) {
+                        n++;
+                        showToast(`서버에 올리는 중... (경로 ${n}/${importedRoutes.length})`);
+                        rt.id = null;
+                        await saveRouteToDB(rt);
+                    }
+                    for (let wp of importedWaypoints) {
+                        wp.id = null;
+                        await saveWaypointToDB(wp);
+                    }
+
+                    showToast(`데이터 복원 완료! (경로 ${importedRoutes.length}개, 웨이포인트 ${importedWaypoints.length}개)`);
+                    loadAndRenderAllWaypoints();
+                    openLibraryModal(); 
+                } catch (err) {
+                    showToast("복원 실패: " + err.message);
+                } finally {
+                    event.target.value = '';
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) { event.target.value = ''; return; }
+            
+            showToast("파일을 읽는 중...");
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const xmlDoc = new DOMParser().parseFromString(e.target.result, "text/xml");
+                    if (xmlDoc.getElementsByTagName("parsererror").length > 0) throw new Error("잘못된 GPX 형식");
+                    
+                    const parsed = parseGPX(xmlDoc, file.name);
+                    if (parsed.points.length === 0) throw new Error("유효한 트랙 데이터가 없습니다.");
+                    
+                    showToast("서버에 저장하는 중...");
+                    parsed.id = await saveRouteToDB(parsed);
+                    showToast(`"${file.name}" 저장 및 로드 완료!`);
+                    displayRoute(parsed);
+                } catch (error) {
+                    showToast("오류: " + error.message);
+                } finally {
+                    event.target.value = ''; 
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function parseGPX(xmlDoc, fileName) {
+            const trkpts = xmlDoc.getElementsByTagName("trkpt");
+            let points = [];
+            let totalDist = 0, totalAscent = 0, totalDescent = 0, prevPt = null;
+
+            for (let i = 0; i < trkpts.length; i++) {
+                const pt = trkpts[i];
+                const lat = parseFloat(pt.getAttribute("lat"));
+                const lon = parseFloat(pt.getAttribute("lon"));
+                const eleNode = pt.getElementsByTagName("ele")[0];
+                const timeNode = pt.getElementsByTagName("time")[0];
+                
+                const ele = eleNode ? parseFloat(eleNode.textContent) : 0;
+                const time = timeNode ? new Date(timeNode.textContent).getTime() : null;
+
+                if (prevPt) {
+                    const dist = getDistance(prevPt.lat, prevPt.lon, lat, lon);
+                    totalDist += dist;
+                    const eleDiff = ele - prevPt.ele;
+                    if (eleDiff > 0) totalAscent += eleDiff;
+                    else totalDescent += Math.abs(eleDiff);
+                }
+                points.push({ lat, lon, ele, time, cumDist: totalDist, speed: 0, gradient: 0 });
+                prevPt = { lat, lon, ele, time, cumDist: totalDist };
+            }
+
+            let year = 'Unknown';
+            if (points.length > 0 && points[0].time) year = new Date(points[0].time).getFullYear().toString();
+            return { id: null, name: fileName, year, points, totalDist, totalAscent, totalDescent };
+        }
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+        
+        function resetSectionAnalysis() {
+            sectionState = 0;
+            startPt = null;
+            endPt = null;
+            sectionLayerGroup.clearLayers();
+            document.getElementById('section-stats-panel').classList.add('hidden');
+            document.getElementById('section-stats-panel').classList.remove('flex');
+        }
+
+        // 최고 경사도 별 마커 생성기
+        function createStarIcon(label, gradient) {
+            const sign = gradient > 0 ? '+' : '';
+            return L.divIcon({
+                className: 'bg-transparent border-none',
+                html: `
+                    <div class="relative flex flex-col items-center pointer-events-none">
+                        <div class="wp-label-text bg-red-600/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-lg border border-red-400 whitespace-nowrap absolute bottom-3.5 transition-all duration-300 backdrop-blur-sm">
+                            ${sign}${gradient.toFixed(1)}%
+                        </div>
+                        <div class="flex items-center justify-center w-3 h-3 bg-yellow-400 rounded-full border-2 border-white shadow-md absolute -bottom-1.5 -left-1.5">
+                            <svg class="w-2 h-2 text-red-600" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                        </div>
+                    </div>
+                `,
+                iconSize: [0, 0],
+                iconAnchor: [0, 0]
+            });
+        }
+
+        // 5분 이상 휴식 마커 (작은 아이콘, 터치하면 휴식 시간 말풍선)
+        const REST_MIN_SEC = 300;
+        function formatRestDuration(sec) {
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
+            if (h > 0) return `${h}시간 ${m}분`;
+            if (m > 0) return s > 0 ? `${m}분 ${s}초` : `${m}분`;
+            return `${s}초`;
+        }
+        function formatClock(ms) {
+            return new Date(ms).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+        function drawRestMarkers(pts) {
+            restMarkersLayerGroup.clearLayers();
+            const restIcon = L.divIcon({
+                className: 'bg-transparent border-none',
+                html: `<div style="width:18px;height:18px;margin:-9px 0 0 -9px;" class="flex items-center justify-center rounded-full bg-indigo-600/95 border border-white shadow-md text-[10px] leading-none">☕</div>`,
+                iconSize: [0, 0],
+                iconAnchor: [0, 0]
+            });
+            for (let i = 1; i < pts.length; i++) {
+                const a = pts[i - 1], b = pts[i];
+                if (!a.time || !b.time) continue;
+                const ds = (b.time - a.time) / 1000;
+                if (ds >= REST_MIN_SEC && ds < 86400) {
+                    const m = L.marker([a.lat, a.lon], { icon: restIcon, zIndexOffset: 700, keyboard: false });
+                    m.bindPopup(
+                        `<div class="text-center">
+                            <div class="text-[11px] text-gray-400">휴식</div>
+                            <div class="font-bold text-indigo-300 text-sm">${formatRestDuration(ds)}</div>
+                            <div class="text-[10px] text-gray-400 mt-0.5">${formatClock(a.time)} ~ ${formatClock(b.time)}</div>
+                        </div>`,
+                        { className: 'rest-popup', autoPan: false, closeButton: false, offset: [0, -6] }
+                    );
+                    m.addTo(restMarkersLayerGroup);
+                }
+            }
+        }
+
+        function displayRoute(route) {
+            isShowAllMode = false;
+            currentRouteData = route;
+            allRoutesLayerGroup.clearLayers();
+            steepMarkersLayerGroup.clearLayers();
+            restMarkersLayerGroup.clearLayers();
+            map.closePopup();
+            resetSectionAnalysis();
+
+            const pts = route.points;
+            for (let i = 0; i < pts.length; i++) {
+                let current = pts[i];
+                
+                let pastSpeedPt = current;
+                for (let j = i; j >= 0; j--) {
+                    if (current.cumDist - pts[j].cumDist >= 50) { pastSpeedPt = pts[j]; break; }
+                }
+                if (pastSpeedPt !== current && current.time && pastSpeedPt.time) {
+                    const timeDiffSec = (current.time - pastSpeedPt.time) / 1000;
+                    current.speed = timeDiffSec > 0 ? ((current.cumDist - pastSpeedPt.cumDist) / timeDiffSec) * 3.6 : 0;
+                } else {
+                    current.speed = 0;
+                }
+                
+                let pastGradPt = current;
+                let futureGradPt = current;
+                
+                for (let j = i; j >= 0; j--) {
+                    if (current.cumDist - pts[j].cumDist >= 100) { pastGradPt = pts[j]; break; }
+                }
+                for (let j = i; j < pts.length; j++) {
+                    if (pts[j].cumDist - current.cumDist >= 100) { futureGradPt = pts[j]; break; }
+                }
+                
+                const gradDist = futureGradPt.cumDist - pastGradPt.cumDist;
+                const gradEle = futureGradPt.ele - pastGradPt.ele;
+                current.gradient = gradDist > 0 ? (gradEle / gradDist) * 100 : 0;
+            }
+            
+            if (currentRouteLayer) map.removeLayer(currentRouteLayer);
+            if (scrubberMarker) { map.removeLayer(scrubberMarker); scrubberMarker = null; }
+
+            const getGradientColor = (g) => {
+                const absG = Math.abs(g);
+                if (absG >= 30) return '#000000'; 
+                if (absG >= 20) return '#7f1d1d'; 
+                if (absG >= 10) return '#f97316'; 
+                return '#3b82f6'; 
+            };
+
+            let segments = [];
+            let curSegment = [route.points[0]];
+            let curColor = getGradientColor(route.points[0].gradient || 0);
+
+            for (let i = 1; i < route.points.length; i++) {
+                let pt = route.points[i];
+                let color = getGradientColor(pt.gradient || 0);
+                curSegment.push(pt);
+                
+                if (color !== curColor || i === route.points.length - 1) {
+                    segments.push(L.polyline(curSegment.map(p => [p.lat, p.lon]), { color: curColor, weight: 6, cursor: 'pointer' }));
+                    curSegment = [pt];
+                    curColor = color;
+                }
+            }
+
+            currentRouteLayer = L.featureGroup(segments).addTo(map);
+            map.fitBounds(currentRouteLayer.getBounds(), { padding: [50, 50] });
+
+            if (route.points.length > 0) {
+                let sortedPts = [...route.points].sort((a, b) => Math.abs(b.gradient || 0) - Math.abs(a.gradient || 0));
+                
+                if (sortedPts.length > 0) {
+                    let top1 = sortedPts[0];
+                    let top2 = null;
+                    
+                    for (let i = 1; i < sortedPts.length; i++) {
+                        if (Math.abs(sortedPts[i].cumDist - top1.cumDist) > 300) {
+                            top2 = sortedPts[i];
+                            break;
+                        }
+                    }
+                    if (!top2 && sortedPts.length > 1) top2 = sortedPts[1];
+
+                    if (top1) L.marker([top1.lat, top1.lon], { icon: createStarIcon('최고경사1', top1.gradient), zIndexOffset: 800 }).addTo(steepMarkersLayerGroup);
+                    if (top2) L.marker([top2.lat, top2.lon], { icon: createStarIcon('최고경사2', top2.gradient), zIndexOffset: 800 }).addTo(steepMarkersLayerGroup);
+                }
+            }
+
+            drawRestMarkers(route.points);
+
+            currentRouteLayer.on('click', function(e) {
+                const clickedLat = e.latlng.lat;
+                const clickedLon = e.latlng.lng;
+                
+                let closest = route.points[0];
+                let minDiff = Infinity;
+                
+                for (let pt of route.points) {
+                    const dist = getDistance(clickedLat, clickedLon, pt.lat, pt.lon);
+                    if (dist < minDiff) {
+                        minDiff = dist;
+                        closest = pt;
+                    }
+                }
+                currentScrubDist = closest.cumDist;
+                drawGraph(currentScrubDist);
+            });
+
+            loadAndRenderAllWaypoints();
+
+            const gContainer = document.getElementById('graph-container');
+            gContainer.classList.remove('hidden');
+            gContainer.classList.add('flex');
+            
+            document.getElementById('top-right-controls').style.display = 'flex';
+            
+            map.invalidateSize();
+            resizeCanvas();
+
+            if (route.id) localStorage.setItem('lastViewedRouteId', route.id);
+            
+            currentScrubDist = 0;
+            drawGraph(0);
+        }
+
+        function drawSectionMarkers() {
+            sectionLayerGroup.clearLayers();
+            
+            const createSectionIcon = (label, colorHex) => L.divIcon({
+                className: 'bg-transparent border-none',
+                html: `<div style="background-color: ${colorHex};" class="text-white text-[11px] font-bold px-2 py-1 rounded shadow-lg border-2 border-white whitespace-nowrap absolute -top-8 -left-3">${label}</div>
+                       <div style="background-color: ${colorHex};" class="w-3 h-3 rounded-full border-2 border-white shadow-md absolute -top-1 -left-1"></div>`,
+                iconSize: [0,0], iconAnchor: [0,0]
+            });
+
+            if (startPt) {
+                L.marker([startPt.lat, startPt.lon], { icon: createSectionIcon('출발', '#3b82f6'), zIndexOffset: 900 }).addTo(sectionLayerGroup);
+            }
+            if (endPt) {
+                L.marker([endPt.lat, endPt.lon], { icon: createSectionIcon('종료', '#f97316'), zIndexOffset: 900 }).addTo(sectionLayerGroup); 
+                
+                const sectionPts = currentRouteData.points.filter(p => 
+                    p.cumDist >= Math.min(startPt.cumDist, endPt.cumDist) && 
+                    p.cumDist <= Math.max(startPt.cumDist, endPt.cumDist)
+                );
+                L.polyline(sectionPts.map(p => [p.lat, p.lon]), { color: '#ffffff', weight: 4, opacity: 0.9, dashArray: '5, 8' }).addTo(sectionLayerGroup);
+            }
+        }
+
+        function showSectionStats() {
+            if (!startPt || !endPt) return;
+            const distKm = Math.abs(endPt.cumDist - startPt.cumDist) / 1000;
+            const eleDiff = endPt.ele - startPt.ele;
+            const grad = distKm > 0 ? (eleDiff / (distKm * 1000)) * 100 : 0;
+            
+            let colorClass = eleDiff >= 0 ? 'text-green-400' : 'text-red-400';
+            let sign = eleDiff > 0 ? '+' : '';
+
+            // ---- 이동 속도 계산 ----
+            const lo = Math.min(startPt.cumDist, endPt.cumDist);
+            const hi = Math.max(startPt.cumDist, endPt.cumDist);
+            const secPts = currentRouteData.points.filter(p => p.cumDist >= lo && p.cumDist <= hi);
+
+            let elapsedMs = 0, movingMs = 0, movingM = 0, maxSpeed = 0;
+            const hasTime = startPt.time && endPt.time;
+            if (hasTime) {
+                elapsedMs = Math.abs(endPt.time - startPt.time);
+                for (let i = 1; i < secPts.length; i++) {
+                    const a = secPts[i-1], b = secPts[i];
+                    if (!a.time || !b.time) continue;
+                    const ds = (b.time - a.time) / 1000;
+                    // 상세 통계와 동일 기준: 180초 이상 정지는 휴식으로 간주
+                    if (ds > 0 && ds < 180) {
+                        movingMs += ds * 1000;
+                        movingM += (b.cumDist - a.cumDist);
+                    }
+                }
+                for (const p of secPts) { if (p.speed > maxSpeed) maxSpeed = p.speed; }
+            }
+
+            const fmtTime = ms => {
+                const sec = Math.round(ms / 1000);
+                const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+                return h > 0 ? `${h}시간 ${m}분` : (m > 0 ? `${m}분 ${s}초` : `${s}초`);
+            };
+
+            let speedHtml = '';
+            if (hasTime && elapsedMs > 0) {
+                const avgAll = distKm / (elapsedMs / 3600000);
+                const avgMove = movingMs > 0 ? (movingM / 1000) / (movingMs / 3600000) : 0;
+                speedHtml = `
+                <div class="w-full h-px bg-gray-700 my-1"></div>
+                <div class="flex items-center justify-center space-x-3 w-full">
+                    <div>소요: <span class="text-white font-bold">${fmtTime(elapsedMs)}</span></div>
+                    <div class="w-px h-3 bg-gray-600"></div>
+                    <div>최고: <span class="text-yellow-300 font-bold">${maxSpeed.toFixed(1)}km/h</span></div>
+                </div>
+                <div class="flex items-center justify-center space-x-4 w-full mt-2">
+                    <div class="text-center">
+                        <div class="text-[11px] text-gray-400">평균 (휴식 포함)</div>
+                        <div class="text-emerald-300 font-bold">${avgAll.toFixed(1)}km/h</div>
+                    </div>
+                    <div class="w-px h-8 bg-gray-600"></div>
+                    <div class="text-center">
+                        <div class="text-[11px] text-gray-400">평균 (휴식 제외)</div>
+                        <div class="text-emerald-300 font-bold">${avgMove.toFixed(1)}km/h</div>
+                    </div>
+                </div>`;
+            } else {
+                speedHtml = `
+                <div class="w-full h-px bg-gray-700 my-1"></div>
+                <div class="text-gray-400 text-xs">이 GPX에는 시간 정보가 없어 속도를 계산할 수 없습니다.</div>`;
+            }
+            
+            document.getElementById('section-stats-content').innerHTML = 
+                `<div class="flex items-center justify-center space-x-3 w-full">
+                    <div>거리: <span class="text-blue-300 font-bold">${distKm.toFixed(2)}km</span></div>
+                    <div class="w-px h-3 bg-gray-600"></div>
+                    <div>고도: <span class="${colorClass} font-bold">${sign}${eleDiff.toFixed(0)}m</span></div>
+                    <div class="w-px h-3 bg-gray-600"></div>
+                    <div>경사: <span class="font-bold">${grad.toFixed(1)}%</span></div>
+                </div>` + speedHtml;
+            
+            const panel = document.getElementById('section-stats-panel');
+            panel.classList.remove('hidden');
+            panel.classList.add('flex');
+        }
+
+        function handleLongPress() {
+            if (!currentRouteData) return;
+            if (navigator.vibrate) navigator.vibrate(50);
+            
+            let closest = currentRouteData.points[0];
+            let minDiff = Infinity;
+            for (let p of currentRouteData.points) {
+                const diff = Math.abs((p.cumDist || 0) - currentScrubDist);
+                if (diff < minDiff) { minDiff = diff; closest = p; }
+            }
+
+            if (sectionState === 0) {
+                startPt = closest;
+                sectionState = 1;
+                showToast("📍 시작점이 설정되었습니다. 종료점을 길게 눌러주세요.");
+                drawSectionMarkers();
+            } else if (sectionState === 1) {
+                endPt = closest;
+                sectionState = 2;
+                showToast("🏁 종료점이 설정되었습니다.");
+                drawSectionMarkers();
+                showSectionStats();
+            } else {
+                resetSectionAnalysis();
+                showToast("🔄 구간 선택이 초기화되었습니다.");
+            }
+        }
+
+        let pressTimer = null;
+        function startPressTimer() {
+            clearTimeout(pressTimer);
+            pressTimer = setTimeout(() => { handleLongPress(); }, 600);
+        }
+        function cancelPressTimer() { clearTimeout(pressTimer); }
+
+        function drawGraph(scrubDist = -1) {
+            if (!currentRouteData || !canvas.offsetWidth) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const pts = currentRouteData.points;
+            if (pts.length === 0) return;
+
+            const showSpeed = document.getElementById('speed-toggle')?.checked || false;
+            
+            const padTop = 30;
+            const padBot = 35;
+            const h = canvas.height;
+            const w = canvas.width;
+            
+            const usableH = h - padTop - padBot;
+            const eleBot = h - padBot;
+
+            const maxDist = pts[pts.length - 1].cumDist || 1;
+            const minEle = Math.min(...pts.map(p => p.ele || 0));
+            const maxEle = Math.max(...pts.map(p => p.ele || 0));
+            const eleRange = (maxEle - minEle) || 1;
+
+            let maxSpeed = 10;
+            if (showSpeed) {
+                const speeds = pts.map(p => p.speed || 0).filter(s => !isNaN(s)).sort((a,b) => a-b);
+                if (speeds.length > 0) {
+                    maxSpeed = speeds[Math.floor(speeds.length * 0.95)] || 10;
+                    if (maxSpeed < 10) maxSpeed = 10;
+                }
+            }
+
+            const getX = d => (d / maxDist) * w;
+            const getY = e => eleBot - ((e - minEle) / eleRange) * usableH;
+            const getSpeedY = s => eleBot - (Math.min(s, maxSpeed * 1.2) / (maxSpeed * 1.2)) * usableH;
+
+            ctx.beginPath();
+            ctx.moveTo(getX(pts[0].cumDist), eleBot);
+            for(let i=0; i<pts.length; i++) ctx.lineTo(getX(pts[i].cumDist), getY(pts[i].ele || 0));
+            ctx.lineTo(getX(pts[pts.length-1].cumDist), eleBot);
+            ctx.fillStyle = 'rgba(234, 179, 8, 0.15)'; 
+            ctx.fill();
+
+            ctx.beginPath();
+            for(let i=0; i<pts.length; i++) ctx.lineTo(getX(pts[i].cumDist), getY(pts[i].ele || 0));
+            ctx.strokeStyle = '#eab308'; 
+            ctx.lineWidth = 1.5; 
+            ctx.stroke();
+
+            if (showSpeed) {
+                ctx.beginPath();
+                for(let i=0; i<pts.length; i++) ctx.lineTo(getX(pts[i].cumDist), getSpeedY(pts[i].speed || 0));
+                ctx.strokeStyle = '#3b82f6'; 
+                ctx.lineWidth = 1.5; 
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = '#9ca3af'; ctx.font = '10px sans-serif';
+            ctx.textAlign = 'left'; ctx.fillText('0km', 5, h - 5);
+            ctx.textAlign = 'right'; ctx.fillText(`${(maxDist/1000).toFixed(1)}km`, w - 5, h - 5);
+            ctx.textAlign = 'left';
+
+            if (scrubDist >= 0) {
+                let closest = pts[0];
+                let minDiff = Infinity;
+                for (let pt of pts) {
+                    const diff = Math.abs((pt.cumDist || 0) - scrubDist);
+                    if (diff < minDiff) { minDiff = diff; closest = pt; }
+                }
+
+                const cx = getX(closest.cumDist || 0);
+                const cy = getY(closest.ele || 0);
+
+                ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
+                ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 1; ctx.stroke();
+
+                let textX = cx + 5;
+                if (textX > w - 100) textX = cx - 100;
+
+                let textY = cy - 10;
+                const textBlockHeight = showSpeed ? 45 : 30;
+                const maxAllowedY = h - padBot - textBlockHeight;
+
+                if (textY > maxAllowedY) textY = maxAllowedY;
+                if (textY < padTop) textY = padTop;
+
+                ctx.fillStyle = 'white'; ctx.font = 'bold 12px sans-serif';
+                ctx.fillText(`고도: ${(closest.ele || 0).toFixed(0)}m`, textX, textY);
+                ctx.fillStyle = '#a7f3d0'; ctx.font = '10px sans-serif';
+                ctx.fillText(`거리: ${((closest.cumDist || 0)/1000).toFixed(2)}km`, textX, textY + 15);
+                if (showSpeed) {
+                    ctx.fillStyle = '#93c5fd';
+                    ctx.fillText(`속도: ${(closest.speed || 0).toFixed(1)}km/h`, textX, textY + 30);
+                }
+
+                let formattedTime = '시간 미상';
+                if (closest.time) {
+                    const d = new Date(closest.time);
+                    const mo = d.getMonth() + 1;
+                    const da = d.getDate();
+                    const hr = String(d.getHours()).padStart(2, '0');
+                    const mn = String(d.getMinutes()).padStart(2, '0');
+                    const sc = String(d.getSeconds()).padStart(2, '0');
+                    formattedTime = `${mo}/${da} ${hr}:${mn}:${sc}`;
+                }
+
+                const sign = (closest.gradient || 0) > 0 ? '+' : '';
+                const iconHtml = `
+                    <div style="position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; background-color: #22c55e; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.5);"></div>
+                    <div style="position: absolute; left: 0px; top: -42px; transform: translateX(-50%); background-color: #1f2937; color: white; padding: 4px 6px; border-radius: 6px; font-size: 10px; white-space: nowrap; border: 1px solid #374151; text-align: center; line-height: 1.3; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);">
+                        ${formattedTime}<br><span style="color: #93c5fd; font-weight: bold;">경사: ${sign}${(closest.gradient || 0).toFixed(1)}%</span>
+                    </div>
+                `;
+                
+                const customIcon = L.divIcon({
+                    className: 'bg-transparent border-none',
+                    html: iconHtml,
+                    iconSize: [0, 0],
+                    iconAnchor: [0, 0]
+                });
+
+                if (!scrubberMarker) {
+                    scrubberMarker = L.marker([closest.lat, closest.lon], { icon: customIcon, zIndexOffset: 1000 }).addTo(map);
+                    
+                    scrubberMarker.on('mousedown', startPressTimer);
+                    scrubberMarker.on('mouseup', cancelPressTimer);
+                    scrubberMarker.on('touchstart', startPressTimer);
+                    scrubberMarker.on('touchend', cancelPressTimer);
+                    scrubberMarker.on('contextmenu', (e) => { e.originalEvent.preventDefault(); handleLongPress(); });
+                } else {
+                    scrubberMarker.setLatLng([closest.lat, closest.lon]);
+                    scrubberMarker.setIcon(customIcon);
+                }
+
+                if (!map.getBounds().contains([closest.lat, closest.lon])) {
+                    map.panTo([closest.lat, closest.lon], { animate: true, duration: 0.25 });
+                }
+            }
+        }
+
+        let isDragging = false;
+        const doScrub = (x) => {
+            if(!currentRouteData) return;
+            const max = currentRouteData.points[currentRouteData.points.length-1].cumDist;
+            let d = (x / canvas.width) * max;
+            currentScrubDist = Math.max(0, Math.min(d, max));
+            drawGraph(currentScrubDist);
+        };
+        
+        canvas.addEventListener('mousedown', e => { 
+            isDragging = true; doScrub(e.offsetX); 
+            startPressTimer(); 
+        });
+        window.addEventListener('mousemove', e => { 
+            if(isDragging) { 
+                doScrub(e.clientX - canvas.getBoundingClientRect().left); 
+                cancelPressTimer(); 
+            } 
+        });
+        window.addEventListener('mouseup', () => { 
+            isDragging = false; 
+            cancelPressTimer(); 
+        });
+        
+        canvas.addEventListener('touchstart', e => { 
+            isDragging = true; 
+            doScrub(e.touches[0].clientX - canvas.getBoundingClientRect().left); 
+            e.preventDefault(); 
+            startPressTimer(); 
+        });
+        window.addEventListener('touchmove', e => { 
+            if(isDragging) { 
+                doScrub(e.touches[0].clientX - canvas.getBoundingClientRect().left); 
+                e.preventDefault(); 
+                cancelPressTimer(); 
+            } 
+        });
+        window.addEventListener('touchend', () => { 
+            isDragging = false; 
+            cancelPressTimer(); 
+        });
+
+        function filterLibrary() {
+            const query = document.getElementById('library-search').value.toLowerCase();
+            const sections = document.querySelectorAll('.library-year-section');
+            
+            sections.forEach(sec => {
+                const items = sec.querySelectorAll('.library-item');
+                let hasVisibleItem = false;
+                
+                items.forEach(item => {
+                    const name = item.getAttribute('data-name').toLowerCase();
+                    if (name.includes(query)) {
+                        item.style.display = 'flex';
+                        hasVisibleItem = true;
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+                
+                sec.style.display = hasVisibleItem ? 'block' : 'none';
+            });
+        }
+
+        async function openLibraryModal() {
+            document.getElementById('library-search').value = '';
+            
+            const list = document.getElementById('library-list-content');
+            list.innerHTML = '<p class="text-gray-400 text-center py-6">불러오는 중...</p>';
+            let routes;
+            try { routes = await getAllRoutesFromDB(true); }
+            catch (e) { list.innerHTML = `<p class="text-red-300 text-center py-6 text-sm">${e.message}</p>`; return; }
+            list.innerHTML = '';
+            
+            if (routes.length === 0) {
+                list.innerHTML = '<p class="text-gray-400 text-center py-6">저장된 경로가 없습니다.</p>';
+            } else {
+                const grouped = {};
+                routes.forEach(r => { const y = r.year || 'Unknown'; if(!grouped[y]) grouped[y] = []; grouped[y].push(r); });
+                
+                Object.keys(grouped).sort((a,b)=>b.localeCompare(a)).forEach(yr => {
+                    const sec = document.createElement('div');
+                    sec.className = 'library-year-section'; 
+                    sec.innerHTML = `<h4 class="text-xs font-bold text-blue-400 mb-2">${yr}</h4>`;
+                    
+                    const ul = document.createElement('div'); 
+                    ul.className = 'space-y-2 mb-4';
+                    
+                    grouped[yr].forEach(rt => {
+                        const item = document.createElement('div');
+                        item.className = 'library-item flex justify-between items-center bg-gray-800 p-3 rounded-xl';
+                        item.setAttribute('data-name', rt.name);
+                        
+                        const infoDiv = document.createElement('div');
+                        infoDiv.className = 'truncate flex-1 cursor-pointer';
+                        infoDiv.innerHTML = `<p class="text-sm text-white truncate hover:text-blue-300 transition">${rt.name}</p><p class="text-xs text-gray-400">${(rt.totalDist/1000).toFixed(2)}km</p>`;
+                        infoDiv.onclick = () => { openRouteById(rt.id); closeLibraryModal(); };
+
+                        const btnDiv = document.createElement('div');
+                        btnDiv.className = 'flex space-x-2 shrink-0 ml-3';
+
+                        const openBtn = document.createElement('button');
+                        openBtn.className = 'bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg transition';
+                        openBtn.innerText = '열기';
+                        openBtn.onclick = () => { openRouteById(rt.id); closeLibraryModal(); };
+
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-1.5 rounded-lg transition';
+                        delBtn.innerText = '삭제';
+                        delBtn.onclick = async () => {
+                            if (confirm(`'${rt.name}' 경로를 정말 삭제하시겠습니까?`)) {
+                                try {
+                                    await deleteRouteFromDB(rt.id);
+                                    showToast("경로가 삭제되었습니다.");
+                                    
+                                    if (currentRouteData && currentRouteData.id === rt.id) {
+                                        if (currentRouteLayer) map.removeLayer(currentRouteLayer);
+                                        if (scrubberMarker) { map.removeLayer(scrubberMarker); scrubberMarker = null; }
+                                        currentRouteData = null;
+                                        resetSectionAnalysis();
+                                        steepMarkersLayerGroup.clearLayers();
+                                        restMarkersLayerGroup.clearLayers();
+                                        document.getElementById('graph-container').classList.add('hidden');
+                                        document.getElementById('graph-container').classList.remove('flex');
+                                        document.getElementById('top-right-controls').style.display = 'none';
+                                        localStorage.removeItem('lastViewedRouteId');
+                                    }
+                                    openLibraryModal();
+                                } catch(e) {
+                                    showToast("삭제 실패: " + e);
+                                }
+                            }
+                        };
+
+                        btnDiv.appendChild(openBtn);
+                        btnDiv.appendChild(delBtn);
+                        item.appendChild(infoDiv);
+                        item.appendChild(btnDiv);
+                        ul.appendChild(item);
+                    });
+                    sec.appendChild(ul); 
+                    list.appendChild(sec);
+                });
+            }
+            document.getElementById('library-modal').classList.remove('hidden');
+        }
+        function closeLibraryModal() { document.getElementById('library-modal').classList.add('hidden'); }
+
+        function handleMapZoom() {
+            const z = map.getZoom();
+            
+            if (isShowAllMode) {
+                const isZoomedOut = z < 10;
+                const weight = isZoomedOut ? 5 : 3;
+                const color = isZoomedOut ? '#ef4444' : '#3b82f6';
+
+                allRoutesLayerGroup.eachLayer(layer => {
+                    if (layer instanceof L.Polyline && !(layer instanceof L.CircleMarker)) {
+                        layer.setStyle({ weight: weight, color: color });
+                    } else if (layer instanceof L.CircleMarker) {
+                        layer.setStyle({ 
+                            opacity: isZoomedOut ? 1 : 0, 
+                            fillOpacity: isZoomedOut ? 1 : 0 
+                        });
+                    }
+                });
+            }
+            
+            // 줌 레벨 14 미만일 때 라벨 숨김 (기존 16에서 14로 변경)
+            if (z < 14) {
+                document.getElementById('map').classList.add('hide-wp-label');
+            } else {
+                document.getElementById('map').classList.remove('hide-wp-label');
+            }
+        }
+        
+        map.on('zoomend', handleMapZoom);
+        map.on('movestart', () => {
+            // 휴식 말풍선만 화면 이동 시 닫는다 (경로 선택 말풍선은 유지)
+            const cls = (map._popup && map._popup.options.className) || '';
+            if (cls.includes('rest-popup')) map.closePopup();
+        });
+        map.on('popupclose', e => { if (e.popup === routePopup) clearRouteHighlight(); });
+
+        async function showAllRoutes() {
+            let routes;
+            try { routes = await getAllRoutesFromDB(true); }
+            catch (e) { showToast('불러오기 실패: ' + e.message); return; }
+            if (routes.length === 0) { showToast("경로가 없습니다."); return; }
+            
+            isShowAllMode = true;
+
+            if (currentRouteLayer) map.removeLayer(currentRouteLayer);
+            if (scrubberMarker) { map.removeLayer(scrubberMarker); scrubberMarker = null; }
+            allRoutesLayerGroup.clearLayers();
+            steepMarkersLayerGroup.clearLayers(); 
+            restMarkersLayerGroup.clearLayers();
+            map.closePopup();
+            resetSectionAnalysis();
+            
+            let totalBounds = L.latLngBounds();
+            
+            routes.forEach(r => {
+                const latlngs = (r.overview || []).map(p => [p[0], p[1]]);
+                if (latlngs.length === 0) return;
+                
+                const line = L.polyline(latlngs, { ...ROUTE_STYLE, renderer: allRoutesRenderer, bubblingMouseEvents: false });
+                line.on('click', e => selectRouteInAllView(r, line, e.latlng));
+
+                allRoutesLayerGroup.addLayer(line);
+                totalBounds.extend(line.getBounds());
+
+                const marker = L.circleMarker(latlngs[0], {
+                    radius: 5, color: '#ffffff', weight: 1, fillColor: '#ef4444', fillOpacity: 0, opacity: 0,
+                    renderer: allRoutesRenderer, bubblingMouseEvents: false
+                });
+                marker.on('click', e => selectRouteInAllView(r, line, e.latlng));
+                allRoutesLayerGroup.addLayer(marker);
+            });
+
+            const gContainer = document.getElementById('graph-container');
+            gContainer.classList.add('hidden');
+            gContainer.classList.remove('flex');
+            
+            document.getElementById('top-right-controls').style.display = 'none';
+            map.invalidateSize();
+            
+            loadAndRenderAllWaypoints();
+
+            if (totalBounds.isValid()) {
+                map.fitBounds(totalBounds, { padding: [50, 50] });
+            }
+            
+            localStorage.removeItem('lastViewedRouteId');
+            handleMapZoom();
+        }
+
+        // ===== 예상 소모 칼로리: ACSM 보행 대사식 기반 =====
+        // ACSM: VO2(mL/kg/min) = 0.1*S + 1.8*S*G + 3.5  (S: 속도 m/min, G: 경사 소수)
+        //  -> 수평 이동 1m당 0.1 mL O2/kg, 고도 상승 1m당 1.8 mL O2/kg, 안정시 3.5 mL/kg/min(=1 MET)
+        // 산소 1L = 약 5kcal. 하산은 평지 걷기와 같은 비용으로 계산(제동·균형 부하 반영, 에너지 절감 미인정).
+        // 상승/하강은 GPS 고도 잡음을 걸러낸 값(앞뒤 15m 평균 + ±3m 이내 변화 무시)을 쓴다.
+        const BODY_KG_KEY = 'gpxTracker_bodyKg';
+        const KCAL_PER_ML_O2 = 0.005;
+        const ML_O2_PER_KG_PER_M_HORIZ = 0.1;
+        const ML_O2_PER_KG_PER_M_ASCENT = 1.8;
+        const REST_KCAL_PER_KG_HOUR = 3.5 * 60 * KCAL_PER_ML_O2; // 1 MET = 1.05 kcal/kg/h
+        const ASCENT_DEADBAND_M = 3;      // 이 값(m) 미만의 오르내림은 고도 잡음으로 보고 무시
+        const ELE_SMOOTH_HALF_WIN_M = 15; // 고도를 앞뒤 15m 구간 평균으로 평활화
+        let energyCache = null;
+
+        // 이동 거리(cumDist) 기준 앞뒤 halfWin(m) 이동 평균으로 고도 잡음 완화
+        function smoothElevation(pts, halfWin) {
+            const n = pts.length, out = new Array(n);
+            let lo = 0, hi = 0, sum = 0;
+            for (let i = 0; i < n; i++) {
+                const c = pts[i].cumDist;
+                while (hi < n && pts[hi].cumDist <= c + halfWin) { sum += pts[hi].ele; hi++; }
+                while (lo < hi && pts[lo].cumDist < c - halfWin) { sum -= pts[lo].ele; lo++; }
+                out[i] = sum / (hi - lo);
+            }
+            return out;
+        }
+
+        // 지그재그(데드밴드) 방식 상승/하강 계산: 반대 방향으로 band(m) 이상 움직여야 방향 전환으로 인정
+        function computeAscentDescent(eles, band) {
+            let asc = 0, desc = 0;
+            if (!eles || eles.length < 2) return { asc, desc };
+            let last = eles[0], ext = last, dir = 0;
+            for (let i = 1; i < eles.length; i++) {
+                const e = eles[i];
+                if (dir === 0) {
+                    if (e - last >= band) { dir = 1; ext = e; }
+                    else if (last - e >= band) { dir = -1; ext = e; }
+                } else if (dir === 1) {
+                    if (e > ext) ext = e;
+                    else if (ext - e >= band) { asc += ext - last; last = ext; dir = -1; ext = e; }
+                } else {
+                    if (e < ext) ext = e;
+                    else if (e - ext >= band) { desc += last - ext; last = ext; dir = 1; ext = e; }
+                }
+            }
+            if (dir === 1) asc += ext - last;
+            else if (dir === -1) desc += last - ext;
+            return { asc, desc };
+        }
+
+        function computeEnergyProfile(pts, hours) {
+            const distM = pts && pts.length ? pts[pts.length - 1].cumDist : 0;
+            const ad = computeAscentDescent(smoothElevation(pts, ELE_SMOOTH_HALF_WIN_M), ASCENT_DEADBAND_M);
+            return { distM, ascentM: ad.asc, descentM: ad.desc, hours: hours || 0 };
+        }
+
+        function updateEnergyDisplay() {
+            if (!energyCache) return;
+            const bodyKg = Math.max(0, parseFloat(document.getElementById('energy-body-kg').value) || 0);
+            const packKg = Math.max(0, parseFloat(document.getElementById('energy-pack-kg').value) || 0);
+            const terrain = parseFloat(document.getElementById('energy-terrain').value) || 1;
+            const mass = bodyKg + packKg;
+            if (bodyKg > 0) { try { localStorage.setItem(BODY_KG_KEY, String(bodyKg)); } catch (e) {} }
+
+            const p = energyCache;
+            const horizKcal = ML_O2_PER_KG_PER_M_HORIZ * p.distM * mass * KCAL_PER_ML_O2 * terrain;
+            const upKcal = ML_O2_PER_KG_PER_M_ASCENT * p.ascentM * mass * KCAL_PER_ML_O2 * terrain;
+            const activeKcal = horizKcal + upKcal;
+            const totalKcal = p.hours > 0 ? activeKcal + REST_KCAL_PER_KG_HOUR * bodyKg * p.hours : null;
+            const fmt = x => Math.round(x).toLocaleString();
+
+            const ok = bodyKg > 0;
+            document.getElementById('energy-active').textContent = ok ? `${fmt(activeKcal)} kcal` : '체중 입력';
+            document.getElementById('energy-total').textContent = ok ? (totalKcal === null ? '시간 정보 없음' : `${fmt(totalKcal)} kcal`) : '체중 입력';
+            document.getElementById('energy-horiz').innerHTML = ok ? `${(p.distM / 1000).toFixed(1)}km<br>${fmt(horizKcal)}kcal` : '-';
+            document.getElementById('energy-up').innerHTML = ok ? `+${fmt(p.ascentM)}m<br>${fmt(upKcal)}kcal` : '-';
+            document.getElementById('energy-down-note').textContent = `하강 -${fmt(p.descentM)}m는 평지와 같은 비용으로 계산`;
+        }
+
+        function formatLogTime(ts) {
+            return new Date(ts).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+
+        // 트랙 시작~종료 일시 표시용 (기기의 현재 시간대 기준)
+        function formatTrackPeriod(pts) {
+            let t0 = null, t1 = null;
+            for (let i = 0; i < pts.length; i++) { if (pts[i].time) { t0 = pts[i].time; break; } }
+            for (let i = pts.length - 1; i >= 0; i--) { if (pts[i].time) { t1 = pts[i].time; break; } }
+            if (!t0 || !t1 || isNaN(t0) || isNaN(t1)) return '시간 정보 없음';
+            const wd = ['일', '월', '화', '수', '목', '금', '토'];
+            const dStr = ms => { const d = new Date(ms); return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} (${wd[d.getDay()]})`; };
+            const tStr = ms => new Date(ms).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+            if (dStr(t0) === dStr(t1)) return `${dStr(t0)}<br>${tStr(t0)} ~ ${tStr(t1)}`;
+            return `${dStr(t0)} ${tStr(t0)} ~<br>${dStr(t1)} ${tStr(t1)}`;
+        }
+
+        // 사용자 입력 기록(물/식사/특이사항)은 경로 데이터(userLog)에 함께 저장 -> 백업/복원에도 포함된다
+        async function saveRouteUserLog() {
+            if (!currentRouteData) return;
+            const waterRaw = document.getElementById('log-water').value;
+            const waterNum = parseFloat(waterRaw);
+            const log = {
+                waterL: waterRaw === '' || !isFinite(waterNum) ? null : Math.max(0, waterNum),
+                meals: document.getElementById('log-meals').value.trim(),
+                notes: document.getElementById('log-notes').value.trim(),
+                packKg: Math.max(0, parseFloat(document.getElementById('energy-pack-kg').value) || 0),
+                terrain: parseFloat(document.getElementById('energy-terrain').value) || 1.1,
+                updatedAt: Date.now()
+            };
+            try {
+                if (!currentRouteData.id) throw new Error('저장된 경로가 아닙니다.');
+                await saveRouteUserLogToDB(currentRouteData.id, log);
+                currentRouteData.userLog = log;
+                document.getElementById('log-saved-at').textContent = `마지막 저장: ${formatLogTime(log.updatedAt)}`;
+                showToast('기록이 저장되었습니다.');
+            } catch (e) {
+                showToast('기록 저장 실패: ' + (e && e.message ? e.message : e));
+            }
+        }
+
+        function openDetailModal() {
+            if (!currentRouteData) return;
+            const pts = currentRouteData.points;
+            let tt = 0, mt = 0, rt = 0;
+            const restMinList = []; // 3분 이상 휴식 각각의 시간(분), 시간 순서
+            if (pts.length > 0 && pts[0].time && pts[pts.length-1].time) tt = pts[pts.length-1].time - pts[0].time;
+            for (let i=1; i<pts.length; i++) {
+                if (pts[i].time && pts[i-1].time) {
+                    const ds = (pts[i].time - pts[i-1].time)/1000;
+                    if (ds > 0 && ds < 86400) { if (ds >= 180) { rt += ds*1000; restMinList.push(Math.round(ds/60)); } else mt += ds*1000; }
+                }
+            }
+            const dKm = currentRouteData.totalDist / 1000;
+            const th = tt / 3600000, mh = mt / 3600000;
+            const fmt = ms => ms > 0 ? `${Math.floor(ms/3600000)}시간 ${Math.floor((ms%3600000)/60000)}분` : '0분';
+            
+            // 최고 경사도 계산 로직
+            let steep1 = null, steep2 = null;
+            if (pts.length > 0) {
+                let sortedPts = [...pts].sort((a, b) => Math.abs(b.gradient || 0) - Math.abs(a.gradient || 0));
+                if (sortedPts.length > 0) {
+                    steep1 = sortedPts[0];
+                    for (let i = 1; i < sortedPts.length; i++) {
+                        if (Math.abs(sortedPts[i].cumDist - steep1.cumDist) > 300) {
+                            steep2 = sortedPts[i];
+                            break;
+                        }
+                    }
+                    if (!steep2 && sortedPts.length > 1) steep2 = sortedPts[1];
+                }
+            }
+
+            const formatGrad = (pt) => {
+                if (!pt || !pt.gradient) return '-';
+                const sign = pt.gradient > 0 ? '+' : '';
+                return `${sign}${pt.gradient.toFixed(1)}%`;
+            };
+            
+            document.getElementById('detail-content').innerHTML = `
+                <div class="flex justify-between items-start border-b border-gray-800 pb-2"><span class="text-gray-400">일시</span><span class="text-white text-right leading-snug">${formatTrackPeriod(pts)}</span></div>
+                <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">거리</span><span class="text-white">${dKm.toFixed(2)} km</span></div>
+                <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">전체 시간</span><span class="text-white">${fmt(tt)}</span></div>
+                <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">휴식 제외</span><span class="text-white">${fmt(mt)}</span></div>
+                <div class="border-b border-gray-800 pb-2">
+                    <div class="flex justify-between"><span class="text-gray-400">휴식 (3분 이상)</span><span class="text-white">${restMinList.length > 0 ? `${restMinList.length}회 · 합계 ${Math.round(rt/60000)}분` : '없음'}</span></div>
+                    ${restMinList.length > 0 ? `<div class="text-xs text-indigo-300 mt-1 leading-relaxed break-words">${restMinList.join(', ')} (분)</div>` : ''}
+                </div>
+                <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">평균 (포함)</span><span class="text-white">${th>0?(dKm/th).toFixed(1):0} km/h</span></div>
+                <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">평균 (제외)</span><span class="text-white">${mh>0?(dKm/mh).toFixed(1):0} km/h</span></div>
+                <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">상승</span><span class="text-green-400">+${currentRouteData.totalAscent.toFixed(0)} m</span></div>
+                <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">하강</span><span class="text-red-400">-${currentRouteData.totalDescent.toFixed(0)} m</span></div>
+                <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">최고경사 1위</span><span class="text-yellow-400 font-bold">${formatGrad(steep1)}</span></div>
+                <div class="flex justify-between"><span class="text-gray-400">최고경사 2위</span><span class="text-yellow-400 font-bold">${formatGrad(steep2)}</span></div>
+
+                <div class="border-t border-gray-700 pt-3 space-y-2">
+                    <div class="text-gray-300 font-bold">예상 소모 칼로리</div>
+                    <div class="grid grid-cols-2 gap-2 text-center">
+                        <div class="bg-gray-800 rounded-lg py-2"><div class="text-[11px] text-gray-400">활동 소모 (이동 중 추가)</div><div id="energy-active" class="text-orange-300 font-bold text-base">-</div></div>
+                        <div class="bg-gray-800 rounded-lg py-2"><div class="text-[11px] text-gray-400">전체 소모 (안정시 포함)</div><div id="energy-total" class="text-amber-300 font-bold text-base">-</div></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-[11px] text-center">
+                        <div class="bg-gray-800/60 rounded-lg py-1.5"><div class="text-gray-400">수평 이동</div><div id="energy-horiz" class="text-white leading-snug">-</div></div>
+                        <div class="bg-gray-800/60 rounded-lg py-1.5"><div class="text-gray-400">오르막 상승</div><div id="energy-up" class="text-white leading-snug">-</div></div>
+                    </div>
+                    <div id="energy-down-note" class="text-[10px] text-gray-500 text-center"></div>
+                    <div class="flex items-center space-x-2 text-xs">
+                        <span class="text-gray-400">체중</span>
+                        <input id="energy-body-kg" type="number" inputmode="decimal" min="0" step="0.5" oninput="updateEnergyDisplay()" class="w-16 bg-gray-800 text-white border border-gray-600 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-orange-400">
+                        <span class="text-gray-400">kg</span>
+                        <span class="text-gray-400 ml-2">배낭</span>
+                        <input id="energy-pack-kg" type="number" inputmode="decimal" min="0" step="0.5" oninput="updateEnergyDisplay()" class="w-16 bg-gray-800 text-white border border-gray-600 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-orange-400">
+                        <span class="text-gray-400">kg</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-xs">
+                        <span class="text-gray-400">지형</span>
+                        <select id="energy-terrain" onchange="updateEnergyDisplay()" class="flex-1 bg-gray-800 text-white border border-gray-600 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-orange-400">
+                            <option value="1">평탄한 길 (×1.0)</option>
+                            <option value="1.1">일반 등산로 (×1.1)</option>
+                            <option value="1.2">험한 암릉·너덜 (×1.2)</option>
+                        </select>
+                    </div>
+                    <div class="text-[10px] text-gray-500 leading-snug">ACSM 보행 대사식 기준: 수평 이동 거리와 고도 상승량으로 활동 소모를 계산하고, 지형 계수(Pandolf/Soule-Goldman 지형계수를 참고한 보정)를 곱했습니다. 전체 소모는 활동 소모에 안정시 대사(1 MET = 체중 1kg당 시간당 약 1.05kcal x 체중 x 총 시간)를 더한 값입니다. 상승·하강은 GPS 고도 잡음(앞뒤 15m 평균, ±3m 이내 변화 무시)을 제거한 값이라 위 "상승" 수치와 조금 다를 수 있습니다. 배낭·지형 선택은 '기록 저장' 때 이 경로에 함께 저장됩니다. 오차는 ±20% 안팎의 추정치입니다.</div>
+                </div>
+
+                <div class="border-t border-gray-700 pt-3 space-y-2">
+                    <div class="text-gray-300 font-bold">나의 기록</div>
+                    <label class="block text-xs text-gray-400">물 섭취량 (L)
+                        <input id="log-water" type="number" inputmode="decimal" min="0" step="0.1" placeholder="예: 1.5" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
+                    </label>
+                    <label class="block text-xs text-gray-400">식사 내역
+                        <textarea id="log-meals" rows="3" placeholder="예: 점심 김밥 2줄, 간식 에너지바, 커피 1잔" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400"></textarea>
+                    </label>
+                    <label class="block text-xs text-gray-400">특이사항
+                        <textarea id="log-notes" rows="3" placeholder="예: 날씨, 컨디션, 위험 구간, 다음에 챙길 것" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400"></textarea>
+                    </label>
+                    <button onclick="saveRouteUserLog()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-bold active:scale-95 transition">기록 저장</button>
+                    <div id="log-saved-at" class="text-[10px] text-gray-500 text-right"></div>
+                </div>
+            `;
+
+            // 입력칸 초기값 (사용자 텍스트는 innerHTML이 아닌 value로 넣어 안전하게 처리)
+            let savedBody = 70;
+            try { const v = parseFloat(localStorage.getItem(BODY_KG_KEY)); if (v > 0) savedBody = v; } catch (e) {}
+            const ul = currentRouteData.userLog || {};
+            energyCache = computeEnergyProfile(pts, (mt + rt) / 3600000);
+            document.getElementById('energy-terrain').value = String(ul.terrain || 1.1);
+            document.getElementById('energy-body-kg').value = savedBody;
+            document.getElementById('energy-pack-kg').value = ul.packKg || 0;
+            document.getElementById('log-water').value = (ul.waterL === null || ul.waterL === undefined) ? '' : ul.waterL;
+            document.getElementById('log-meals').value = ul.meals || '';
+            document.getElementById('log-notes').value = ul.notes || '';
+            document.getElementById('log-saved-at').textContent = ul.updatedAt ? `마지막 저장: ${formatLogTime(ul.updatedAt)}` : '';
+            updateEnergyDisplay();
+            document.getElementById('detail-modal').classList.remove('hidden');
+        }
+        function closeDetailModal() { document.getElementById('detail-modal').classList.add('hidden'); }
+
+        function openWaypointModal() {
+            if (!scrubberMarker) { showToast("하단 그래프를 움직여 지도 위 위치를 선택해주세요."); return; }
+            
+            document.getElementById('waypoint-name-input').value = '';
+            document.getElementById('waypoint-modal').classList.remove('hidden');
+            document.getElementById('waypoint-name-input').focus();
+        }
+
+        function closeWaypointModal() { 
+            document.getElementById('waypoint-modal').classList.add('hidden'); 
+        }
+
+        async function confirmAddWaypoint() {
+            const name = document.getElementById('waypoint-name-input').value.trim();
+            if (!name) { showToast("이름을 입력해주세요."); return; }
+            
+            const latlng = scrubberMarker.getLatLng();
+            
+            const existingWaypoints = await getAllWaypointsFromDB();
+            if (existingWaypoints && existingWaypoints.length > 0) {
+                for (let wp of existingWaypoints) {
+                    const dist = getDistance(latlng.lat, latlng.lng, wp.lat, wp.lon);
+                    if (dist <= 30) {
+                        showToast(`너무 가깝습니다! 30m 이내에 '${wp.name}' 포인트가 이미 있습니다.`);
+                        return;
+                    }
+                }
+            }
+
+            const newWp = { lat: latlng.lat, lon: latlng.lng, name: name };
+            
+            try {
+                newWp.id = await saveWaypointToDB(newWp);
+                renderWaypoint(newWp);
+                showToast(`'${name}' 웨이포인트 추가 완료!`);
+                closeWaypointModal();
+            } catch (e) {
+                showToast("저장 실패: " + e.message);
+            }
+        }
+
+        function renderWaypoint(wp) {
+            const iconHtml = `
+                <div class="relative flex flex-col items-center pointer-events-none">
+                    <div class="wp-label-text pointer-events-auto cursor-pointer bg-pink-600/90 backdrop-blur-sm text-white text-[11px] font-bold px-2 py-0.5 rounded shadow-lg border border-pink-400 whitespace-nowrap absolute bottom-4 transition-all duration-300">
+                        ${wp.name}
+                    </div>
+                    <div class="w-3 h-3 bg-pink-500 rounded-full border-2 border-white shadow-md absolute -bottom-1.5 -left-1.5"></div>
+                </div>
+            `;
+            const wpIcon = L.divIcon({
+                className: 'bg-transparent border-none',
+                html: iconHtml,
+                iconSize: [0, 0],
+                iconAnchor: [0, 0]
+            });
+            const marker = L.marker([wp.lat, wp.lon], { icon: wpIcon, zIndexOffset: 600, keyboard: false });
+            marker.on('click', () => openWaypointDeletePopup(wp, marker));
+            marker.addTo(waypointLayerGroup);
+        }
+
+        // 웨이포인트 말풍선을 누르면 삭제 확인 말풍선을 띄운다
+        function openWaypointDeletePopup(wp, marker) {
+            const box = document.createElement('div');
+            box.className = 'text-center';
+
+            const title = document.createElement('div');
+            title.className = 'font-bold text-pink-300 text-[13px] break-all';
+            title.textContent = wp.name;
+
+            const msg = document.createElement('div');
+            msg.className = 'text-[11px] text-gray-300 mt-0.5';
+            msg.textContent = '이 웨이포인트를 삭제할까요?';
+
+            const row = document.createElement('div');
+            row.className = 'flex space-x-2 mt-2';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'flex-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg active:scale-95 transition';
+            cancelBtn.textContent = '취소';
+            cancelBtn.addEventListener('click', () => map.closePopup());
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'flex-1 bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition';
+            delBtn.textContent = '삭제';
+            delBtn.addEventListener('click', async () => {
+                try {
+                    await deleteWaypointFromDB(wp.id);
+                    waypointLayerGroup.removeLayer(marker);
+                    map.closePopup();
+                    showToast(`'${wp.name}' 웨이포인트를 삭제했습니다.`);
+                } catch (e) {
+                    showToast('삭제 실패: ' + (e && e.message ? e.message : e));
+                }
+            });
+
+            row.append(cancelBtn, delBtn);
+            box.append(title, msg, row);
+
+            L.popup({ autoPan: false, closeButton: false, className: 'route-popup', offset: [0, -34], maxWidth: 240 })
+                .setLatLng(marker.getLatLng())
+                .setContent(box)
+                .openOn(map);
+        }
+
+        if (isLoggedIn()) { startApp(); } else { showLoginModal(); }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker 등록 성공:', reg.scope))
+                    .catch(err => console.log('Service Worker 등록 실패:', err));
+            });
+        }
+    </script>
+</body>
+</html>
