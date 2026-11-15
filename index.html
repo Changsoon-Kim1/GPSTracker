@@ -1079,7 +1079,7 @@
             const hi = Math.max(startPt.cumDist, endPt.cumDist);
             const secPts = currentRouteData.points.filter(p => p.cumDist >= lo && p.cumDist <= hi);
 
-            let elapsedMs = 0, movingMs = 0, movingM = 0, maxSpeed = 0;
+            let elapsedMs = 0, movingMs = 0, movingM = 0, restMs = 0, maxSpeed = 0;
             const hasTime = startPt.time && endPt.time;
             if (hasTime) {
                 elapsedMs = Math.abs(endPt.time - startPt.time);
@@ -1091,6 +1091,8 @@
                     if (ds > 0 && ds < 180) {
                         movingMs += ds * 1000;
                         movingM += (b.cumDist - a.cumDist);
+                    } else if (ds >= 180 && ds < 86400) {
+                        restMs += ds * 1000; // 휴식 시간 합계 (상세 통계와 같은 기준)
                     }
                 }
                 for (const p of secPts) { if (p.speed > maxSpeed) maxSpeed = p.speed; }
@@ -1100,6 +1102,11 @@
                 const sec = Math.round(ms / 1000);
                 const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
                 return h > 0 ? `${h}시간 ${m}분` : (m > 0 ? `${m}분 ${s}초` : `${s}초`);
+            };
+
+            const fmtRest = ms => {
+                const min = Math.round(ms / 60000);
+                return min >= 60 ? `${Math.floor(min / 60)}시간 ${min % 60}분` : `${min}분`;
             };
 
             let speedHtml = '';
@@ -1115,7 +1122,7 @@
                 </div>
                 <div class="flex items-center justify-center space-x-4 w-full mt-2">
                     <div class="text-center">
-                        <div class="text-[11px] text-gray-400">평균 (휴식 포함)</div>
+                        <div class="text-[11px] text-gray-400">평균 (휴식 ${fmtRest(restMs)} 포함)</div>
                         <div class="text-emerald-300 font-bold">${avgAll.toFixed(1)}km/h</div>
                     </div>
                     <div class="w-px h-8 bg-gray-600"></div>
