@@ -7,6 +7,8 @@
     
     <!-- PWA Manifest & Theme Color -->
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <meta name="theme-color" content="#111827">
 
     <!-- Tailwind CSS -->
@@ -159,53 +161,36 @@
             <div class="flex px-5 py-2.5 bg-gray-800 border-b border-gray-800 space-x-2 text-xs">
                 <button onclick="backupLibraryData()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg font-medium transition">데이터 백업</button>
                 <button onclick="document.getElementById('restore-file-input').click()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium transition">데이터 복원</button>
-                <button onclick="openSyncModal()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg font-medium transition">☁ 동기화</button>
+                <button onclick="if (confirm('로그아웃할까요?')) logout()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg font-medium transition">로그아웃</button>
                 <input type="file" id="restore-file-input" accept=".json" class="hidden" onchange="restoreLibraryData(event)">
             </div>
             <div id="library-list-content" class="p-5 overflow-y-auto space-y-4 flex-1"></div>
         </div>
     </div>
 
-    <!-- 모달: 클라우드 동기화 -->
-    <div id="sync-modal" class="fixed inset-0 bg-black/70 z-[2100] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <!-- 모달: 로그인 (서버 DB 접속) -->
+    <div id="login-modal" class="fixed inset-0 bg-black/85 z-[3000] hidden flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-gray-900 border border-gray-700 w-full max-w-sm max-h-[90dvh] rounded-2xl shadow-2xl flex flex-col">
-            <div class="flex justify-between items-center px-5 py-4 border-b border-gray-800 shrink-0">
-                <h3 class="font-bold text-lg text-white">클라우드 동기화</h3>
-                <button onclick="closeSyncModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
-            </div>
+            <div class="px-5 py-4 border-b border-gray-800 shrink-0"><h3 class="font-bold text-lg text-white">GPX Tracker 로그인</h3></div>
             <div class="p-5 space-y-3 text-sm overflow-y-auto min-h-0">
-                <div class="text-xs text-gray-400 leading-snug">PC와 휴대폰이 같은 데이터를 쓰도록 서버(Supabase)와 맞춥니다. 이 기기에는 계속 저장되므로 인터넷이 없어도 쓸 수 있고, 연결되면 자동으로 동기화됩니다.</div>
-
-                <div id="sync-login-box" class="space-y-2">
+                <div class="text-xs text-gray-400 leading-snug">경로와 기록은 서버(Supabase)에 저장됩니다. 로그인하면 PC와 휴대폰에서 같은 데이터를 봅니다. 인터넷 연결이 필요합니다.</div>
+                <div id="login-config-box" class="space-y-2">
                     <label class="block text-xs text-gray-400">프로젝트 주소 (Project URL)
-                        <input id="sync-url" type="url" placeholder="https://xxxx.supabase.co" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
+                        <input id="login-url" type="url" placeholder="https://xxxx.supabase.co" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
                     </label>
                     <label class="block text-xs text-gray-400">anon public 키
-                        <input id="sync-anon" type="text" placeholder="eyJ... 또는 sb_publishable_..." class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
+                        <input id="login-anon" type="text" placeholder="eyJ... 또는 sb_publishable_..." class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
                     </label>
-                    <label class="block text-xs text-gray-400">이메일
-                        <input id="sync-email" type="email" autocomplete="username" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
-                    </label>
-                    <label class="block text-xs text-gray-400">비밀번호
-                        <input id="sync-password" type="password" autocomplete="current-password" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
-                    </label>
-                    <button onclick="syncLoginFromUI()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-bold active:scale-95 transition">로그인하고 동기화</button>
                 </div>
-
-                <div id="sync-account-box" class="space-y-2 hidden">
-                    <div class="bg-gray-800 rounded-lg px-3 py-2">
-                        <div class="text-[11px] text-gray-400">로그인 계정</div>
-                        <div id="sync-account-email" class="text-white break-all"></div>
-                    </div>
-                    <div class="flex space-x-2">
-                        <button onclick="syncNow({})" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-bold active:scale-95 transition">지금 동기화</button>
-                        <button onclick="syncLogout()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm font-medium active:scale-95 transition">로그아웃</button>
-                    </div>
-                </div>
-
-                <div id="sync-status" class="text-xs text-amber-300 break-words min-h-[1rem]"></div>
-                <div id="sync-last" class="text-[11px] text-gray-500"></div>
-                <div class="text-[10px] text-gray-500 leading-snug">경로·웨이포인트·나의 기록(물/식사/특이사항)이 함께 동기화됩니다. 두 기기에서 같은 항목을 고치면 나중에 저장한 쪽이 남습니다. 삭제도 다른 기기에 전달됩니다. 비밀번호는 저장하지 않고 로그인 정보(토큰)만 이 기기에 보관합니다.</div>
+                <label class="block text-xs text-gray-400">이메일
+                    <input id="login-email" type="email" autocomplete="username" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
+                </label>
+                <label class="block text-xs text-gray-400">비밀번호
+                    <input id="login-password" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter') loginFromUI()" class="mt-1 w-full bg-gray-800 text-white border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-400">
+                </label>
+                <button onclick="loginFromUI()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-bold active:scale-95 transition">로그인</button>
+                <div id="login-status" class="text-xs text-amber-300 break-words min-h-[1rem]"></div>
+                <div class="text-[10px] text-gray-500 leading-snug">비밀번호는 저장하지 않고, 로그인 정보(토큰)만 이 기기에 보관합니다.</div>
             </div>
         </div>
     </div>
@@ -326,7 +311,7 @@
             nameBtn.type = 'button';
             nameBtn.className = 'font-bold text-[13px] text-sky-300 underline underline-offset-2 text-left break-all active:opacity-60';
             nameBtn.textContent = route.name + ' ›';
-            nameBtn.addEventListener('click', () => { map.closePopup(); displayRoute(route); });
+            nameBtn.addEventListener('click', () => { map.closePopup(); openRouteById(route.id); });
             const info = document.createElement('div');
             info.className = 'text-[11px] text-gray-300 mt-1';
             info.textContent = `거리: ${(route.totalDist / 1000).toFixed(2)} km`;
@@ -373,122 +358,215 @@
             }, 3000);
         }
 
-        let db;
-        function initDB() {
-            return new Promise((resolve, reject) => {
-                const req = indexedDB.open("GPXTrackerDB", 4);
-                req.onupgradeneeded = e => {
-                    db = e.target.result;
-                    if (!db.objectStoreNames.contains("routes")) {
-                        db.createObjectStore("routes", { keyPath: "id" });
-                    }
-                    if (!db.objectStoreNames.contains("waypoints")) {
-                        db.createObjectStore("waypoints", { keyPath: "id" });
-                    }
-                    // 삭제 기록(클라우드 동기화용): 다른 기기에 "삭제됨"을 전달하기 위해 필요
-                    if (!db.objectStoreNames.contains("tombstones")) {
-                        db.createObjectStore("tombstones", { keyPath: "k" });
-                    }
-                };
-                req.onsuccess = e => {
-                    db = e.target.result;
-                    db.onversionchange = () => { db.close(); db = null; };
-                    resolve(db);
-                };
-                req.onblocked = () => showToast("다른 GPX Tracker 탭을 모두 닫고 다시 열어 주세요.");
-                req.onerror = () => reject("DB 초기화 실패");
-            });
+        // =====================================================================
+        //  서버(Supabase) 단일 DB
+        //  * 이 기기에는 데이터를 저장하지 않는다. 경로/웨이포인트/나의 기록은 모두 서버에 있다.
+        //  * 로그인 정보(토큰)만 이 기기에 보관한다. 비밀번호는 저장하지 않는다.
+        //  * 경로 목록은 가벼운 정보(이름, 거리, 요약선)만 불러오고, 점 데이터는 경로를 열 때 받는다.
+        // =====================================================================
+        // 프로젝트 주소/공개키(anon)를 여기에 넣어 두면 기기마다 다시 입력하지 않아도 된다.
+        // anon 키는 공개되어도 되는 키이며, 데이터는 서버의 접근 규칙(RLS)으로 보호된다.
+        const SUPABASE_URL = '';
+        const SUPABASE_ANON_KEY = '';
+
+        const CFG_KEY = 'gpx_supabase_cfg';
+        const SES_KEY = 'gpx_supabase_session';
+        const OVERVIEW_MAX_POINTS = 400;
+        let routesCache = null;       // 목록 캐시(점 데이터 없음)
+        let appStarted = false;
+
+        function getCfg() {
+            if (SUPABASE_URL && SUPABASE_ANON_KEY) return { url: SUPABASE_URL.replace(/\/+$/, ''), anonKey: SUPABASE_ANON_KEY };
+            try { return JSON.parse(localStorage.getItem(CFG_KEY)) || null; } catch (e) { return null; }
+        }
+        function getSession() { try { return JSON.parse(localStorage.getItem(SES_KEY)) || null; } catch (e) { return null; } }
+        function isLoggedIn() { const c = getCfg(), ses = getSession(); return !!(c && c.url && c.anonKey && ses && ses.refresh_token); }
+
+        function jwtUserId(token) {
+            try {
+                const b = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+                return JSON.parse(atob(b + '='.repeat((4 - b.length % 4) % 4))).sub || null;
+            } catch (e) { return null; }
+        }
+        function storeSession(j, prev) {
+            const ses = {
+                access_token: j.access_token,
+                refresh_token: j.refresh_token,
+                expires_at: Date.now() + (j.expires_in || 3600) * 1000,
+                user_id: (j.user && j.user.id) || jwtUserId(j.access_token) || (prev && prev.user_id) || null,
+                email: (j.user && j.user.email) || (prev && prev.email) || ''
+            };
+            localStorage.setItem(SES_KEY, JSON.stringify(ses));
+            return ses;
+        }
+        async function authRequest(url, anonKey, grant, body) {
+            let res;
+            try {
+                res = await fetch(`${url}/auth/v1/token?grant_type=${grant}`, {
+                    method: 'POST',
+                    headers: { 'apikey': anonKey, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            } catch (e) { throw new Error('서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.'); }
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(j.error_description || j.msg || j.message || `인증 실패 (${res.status})`);
+            return j;
+        }
+        async function getFreshSession() {
+            const cfg = getCfg(), ses = getSession();
+            if (!cfg || !ses) throw new Error('로그인이 필요합니다.');
+            if (ses.expires_at - Date.now() > 60000) return ses;
+            try {
+                const j = await authRequest(cfg.url, cfg.anonKey, 'refresh_token', { refresh_token: ses.refresh_token });
+                return storeSession(j, ses);
+            } catch (e) {
+                if (/연결할 수 없습니다/.test(e.message)) throw e;
+                localStorage.removeItem(SES_KEY);
+                showLoginModal('로그인이 만료되었습니다. 다시 로그인해 주세요.');
+                throw new Error('로그인이 만료되었습니다.');
+            }
+        }
+
+        async function sbFetch(path, opts) {
+            opts = opts || {};
+            const cfg = getCfg();
+            const ses = await getFreshSession();
+            let res;
+            try {
+                res = await fetch(`${cfg.url}/rest/v1/${path}`, {
+                    method: opts.method || 'GET',
+                    body: opts.body,
+                    headers: Object.assign({
+                        'apikey': cfg.anonKey,
+                        'Authorization': 'Bearer ' + ses.access_token,
+                        'Content-Type': 'application/json'
+                    }, opts.headers || {})
+                });
+            } catch (e) { throw new Error('서버에 연결할 수 없습니다. 인터넷 연결이 필요합니다.'); }
+            if (!res.ok) {
+                const t = await res.text().catch(() => '');
+                throw new Error(`서버 오류 ${res.status} ${t.slice(0, 150)}`);
+            }
+            return res;
+        }
+
+        // ---- 점 데이터 압축 (gzip -> base64). 압축을 지원하지 않는 브라우저는 그대로 저장 ----
+        async function encodePoints(str) {
+            if (typeof CompressionStream === 'undefined') return 'j:' + str;
+            const cs = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
+            const buf = new Uint8Array(await new Response(cs).arrayBuffer());
+            let bin = '';
+            for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+            return 'g:' + btoa(bin);
+        }
+        async function decodePoints(p) {
+            if (p.startsWith('j:')) return p.slice(2);
+            const bin = atob(p.slice(2));
+            const buf = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+            const ds = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+            return await new Response(ds).text();
+        }
+
+        // 전체 경로 보기용 요약선 (최대 400점)
+        function makeOverview(points) {
+            if (!points || points.length === 0) return [];
+            const step = Math.max(1, Math.ceil(points.length / OVERVIEW_MAX_POINTS));
+            const out = [];
+            for (let i = 0; i < points.length; i += step) out.push([+points[i].lat.toFixed(5), +points[i].lon.toFixed(5)]);
+            const last = points[points.length - 1];
+            out.push([+last.lat.toFixed(5), +last.lon.toFixed(5)]);
+            return out;
+        }
+
+        const ROUTE_LIST_COLS = 'id,name,year,total_dist,total_ascent,total_descent,overview,user_log,updated_at';
+        function rowToListRoute(r) {
+            return {
+                id: Number(r.id), name: r.name, year: r.year || 'Unknown',
+                totalDist: Number(r.total_dist) || 0, totalAscent: Number(r.total_ascent) || 0, totalDescent: Number(r.total_descent) || 0,
+                overview: r.overview || [], userLog: r.user_log || undefined, updatedAt: Number(r.updated_at) || 0
+            };
+        }
+
+        // ---- 경로 ----
+        async function getAllRoutesFromDB(force) {
+            if (routesCache && !force) return routesCache;
+            const out = [], PAGE = 500;
+            for (let off = 0; ; off += PAGE) {
+                const res = await sbFetch(`gpx_tracks?select=${ROUTE_LIST_COLS}&order=id.desc&limit=${PAGE}&offset=${off}`);
+                const rows = await res.json();
+                out.push(...rows.map(rowToListRoute));
+                if (rows.length < PAGE) break;
+            }
+            routesCache = out;
+            return out;
+        }
+
+        // 점 데이터까지 포함한 경로 1개 (경로를 열 때 사용)
+        async function getRouteFromDB(id) {
+            const res = await sbFetch(`gpx_tracks?id=eq.${id}&select=${ROUTE_LIST_COLS},points`);
+            const rows = await res.json();
+            if (!rows.length) return null;
+            const rec = rowToListRoute(rows[0]);
+            rec.points = JSON.parse(await decodePoints(rows[0].points));
+            return rec;
         }
 
         async function saveRouteToDB(routeObj) {
-            if (!db) await initDB();
-            return new Promise((resolve, reject) => {
-                try {
-                    const dataToSave = JSON.parse(JSON.stringify(routeObj)); 
-                    if (!dataToSave.id) dataToSave.id = Date.now() + Math.floor(Math.random() * 1000);
-                    dataToSave.updatedAt = Date.now(); // 동기화 충돌 판단용(마지막 수정 시각)
-                    
-                    const transaction = db.transaction(["routes"], "readwrite");
-                    const store = transaction.objectStore("routes");
-                    const req = store.put(dataToSave);
-                    
-                    req.onsuccess = () => { scheduleSync(); resolve(dataToSave.id); };
-                    req.onerror = e => reject(e.target.error);
-                } catch(e) {
-                    reject(e);
-                }
+            const ses = await getFreshSession();
+            const id = routeObj.id || (Date.now() + Math.floor(Math.random() * 1000));
+            const pts = routeObj.points || [];
+            const row = {
+                user_id: ses.user_id, id: id,
+                name: routeObj.name, year: routeObj.year || 'Unknown',
+                total_dist: routeObj.totalDist || 0, total_ascent: routeObj.totalAscent || 0, total_descent: routeObj.totalDescent || 0,
+                overview: makeOverview(pts),
+                user_log: routeObj.userLog || null,
+                points: await encodePoints(JSON.stringify(pts)),
+                updated_at: Date.now()
+            };
+            await sbFetch('gpx_tracks?on_conflict=user_id,id', {
+                method: 'POST',
+                headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify(row)
             });
+            routesCache = null;
+            return id;
         }
 
-        async function getRouteFromDB(id) {
-            if (!db) await initDB();
-            return new Promise((resolve, reject) => {
-                const req = db.transaction(["routes"], "readonly").objectStore("routes").get(id);
-                req.onsuccess = () => resolve(req.result || null);
-                req.onerror = e => reject(e.target.error);
+        // '나의 기록'만 저장 (점 데이터는 다시 올리지 않는다)
+        async function saveRouteUserLogToDB(id, log) {
+            await sbFetch(`gpx_tracks?id=eq.${id}`, {
+                method: 'PATCH',
+                headers: { 'Prefer': 'return=minimal' },
+                body: JSON.stringify({ user_log: log, updated_at: Date.now() })
             });
-        }
-
-        async function getAllRoutesFromDB() {
-            if (!db) await initDB();
-            return new Promise((resolve, reject) => {
-                const req = db.transaction(["routes"], "readonly").objectStore("routes").getAll();
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = e => reject(e.target.error);
-            });
+            if (routesCache) { const r = routesCache.find(x => x.id === id); if (r) r.userLog = log; }
         }
 
         async function deleteRouteFromDB(id) {
-            if (!db) await initDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(["routes", "tombstones"], "readwrite");
-                tx.objectStore("routes").delete(id);
-                tx.objectStore("tombstones").put({ k: 'r:' + id, type: 'r', id: id, deletedAt: Date.now() });
-                tx.oncomplete = () => { scheduleSync(); resolve(); };
-                tx.onerror = e => reject(e.target.error);
-                tx.onabort = e => reject(e.target.error);
-            });
+            await sbFetch(`gpx_tracks?id=eq.${id}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+            routesCache = null;
         }
 
-        async function deleteWaypointFromDB(id) {
-            if (!db) await initDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(["waypoints", "tombstones"], "readwrite");
-                tx.objectStore("waypoints").delete(id);
-                tx.objectStore("tombstones").put({ k: 'w:' + id, type: 'w', id: id, deletedAt: Date.now() });
-                tx.oncomplete = () => { scheduleSync(); resolve(); };
-                tx.onerror = e => reject(e.target.error);
-                tx.onabort = e => reject(e.target.error);
-            });
-        }
-
-        async function saveWaypointToDB(wpObj) {
-            if (!db) await initDB();
-            return new Promise((resolve, reject) => {
-                try {
-                    const dataToSave = JSON.parse(JSON.stringify(wpObj));
-                    if (!dataToSave.id) dataToSave.id = Date.now() + Math.floor(Math.random() * 1000);
-                    dataToSave.updatedAt = Date.now();
-                    
-                    const transaction = db.transaction(["waypoints"], "readwrite");
-                    const store = transaction.objectStore("waypoints");
-                    const req = store.put(dataToSave);
-                    
-                    req.onsuccess = () => { scheduleSync(); resolve(dataToSave.id); };
-                    req.onerror = e => reject(e.target.error);
-                } catch(e) {
-                    reject(e);
-                }
-            });
-        }
-
+        // ---- 웨이포인트 ----
         async function getAllWaypointsFromDB() {
-            if (!db) await initDB();
-            return new Promise((resolve, reject) => {
-                const req = db.transaction(["waypoints"], "readonly").objectStore("waypoints").getAll();
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = e => reject(e.target.error);
+            const res = await sbFetch('gpx_waypoints2?select=id,name,lat,lon&order=id.asc&limit=5000');
+            const rows = await res.json();
+            return rows.map(r => ({ id: Number(r.id), name: r.name, lat: Number(r.lat), lon: Number(r.lon) }));
+        }
+        async function saveWaypointToDB(wp) {
+            const ses = await getFreshSession();
+            const id = wp.id || (Date.now() + Math.floor(Math.random() * 1000));
+            await sbFetch('gpx_waypoints2?on_conflict=user_id,id', {
+                method: 'POST',
+                headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify({ user_id: ses.user_id, id: id, name: wp.name, lat: wp.lat, lon: wp.lon, updated_at: Date.now() })
             });
+            return id;
+        }
+        async function deleteWaypointFromDB(id) {
+            await sbFetch(`gpx_waypoints2?id=eq.${id}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
         }
 
         async function loadAndRenderAllWaypoints() {
@@ -501,322 +579,87 @@
             }
         }
 
-
-        // =====================================================================
-        //  클라우드 동기화 (Supabase REST) - 오프라인 우선 방식
-        //  * 이 기기의 IndexedDB는 그대로 쓰고(산에서 신호가 없어도 동작), 인터넷이 될 때 서버와 맞춘다.
-        //  * 충돌은 "마지막 수정 시각(updatedAt)이 더 최근인 쪽이 이긴다".
-        //  * 처음 동기화는 합치기(union)만 하며, 삭제 기록(tombstone)이 있는 항목만 삭제를 전파한다.
-        // =====================================================================
-        const SYNC_CFG_KEY = 'gpx_sync_cfg';
-        const SYNC_SESSION_KEY = 'gpx_sync_session';
-        const SYNC_LAST_KEY = 'gpx_sync_last';
-        let syncRunning = false, syncPending = false, syncTimer = null;
-
-        function getSyncCfg() { try { return JSON.parse(localStorage.getItem(SYNC_CFG_KEY)) || null; } catch (e) { return null; } }
-        function getSyncSession() { try { return JSON.parse(localStorage.getItem(SYNC_SESSION_KEY)) || null; } catch (e) { return null; } }
-        function isSyncConfigured() {
-            const c = getSyncCfg(), ses = getSyncSession();
-            return !!(c && c.url && c.anonKey && ses && ses.refresh_token);
-        }
-
-        function jwtUserId(token) {
+        // ---- 경로를 열 때: 목록 항목(점 없음) -> 서버에서 전체 데이터를 받아 표시 ----
+        async function openRouteById(id) {
             try {
-                const b = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-                return JSON.parse(atob(b + '='.repeat((4 - b.length % 4) % 4))).sub || null;
-            } catch (e) { return null; }
-        }
-
-        function storeSyncSession(j, prev) {
-            const ses = {
-                access_token: j.access_token,
-                refresh_token: j.refresh_token,
-                expires_at: Date.now() + (j.expires_in || 3600) * 1000,
-                user_id: (j.user && j.user.id) || jwtUserId(j.access_token) || (prev && prev.user_id) || null,
-                email: (j.user && j.user.email) || (prev && prev.email) || ''
-            };
-            localStorage.setItem(SYNC_SESSION_KEY, JSON.stringify(ses));
-            return ses;
-        }
-
-        async function authRequest(url, anonKey, grant, body) {
-            const res = await fetch(`${url}/auth/v1/token?grant_type=${grant}`, {
-                method: 'POST',
-                headers: { 'apikey': anonKey, 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            const j = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(j.error_description || j.msg || j.message || `인증 실패 (${res.status})`);
-            return j;
-        }
-
-        async function syncLogin(url, anonKey, email, password) {
-            url = url.trim().replace(/\/+$/, '');
-            anonKey = anonKey.trim();
-            const j = await authRequest(url, anonKey, 'password', { email: email.trim(), password });
-            localStorage.setItem(SYNC_CFG_KEY, JSON.stringify({ url, anonKey }));
-            storeSyncSession(j, null);
-        }
-
-        async function getSyncSessionFresh() {
-            const cfg = getSyncCfg(), ses = getSyncSession();
-            if (!cfg || !ses) throw new Error('로그인이 필요합니다.');
-            if (ses.expires_at - Date.now() > 60000) return ses;
-            try {
-                const j = await authRequest(cfg.url, cfg.anonKey, 'refresh_token', { refresh_token: ses.refresh_token });
-                return storeSyncSession(j, ses);
+                showToast('경로를 불러오는 중...');
+                const full = await getRouteFromDB(id);
+                if (!full) { showToast('경로를 찾을 수 없습니다. (다른 기기에서 삭제되었을 수 있습니다)'); routesCache = null; return; }
+                displayRoute(full);
             } catch (e) {
-                throw new Error('로그인이 만료되었습니다. 동기화 창에서 다시 로그인해 주세요.');
+                showToast('경로 불러오기 실패: ' + (e && e.message ? e.message : e));
             }
         }
 
-        async function sbFetch(path, opts) {
-            opts = opts || {};
-            const cfg = getSyncCfg();
-            const ses = await getSyncSessionFresh();
-            const res = await fetch(`${cfg.url}/rest/v1/${path}`, {
-                method: opts.method || 'GET',
-                body: opts.body,
-                headers: Object.assign({
-                    'apikey': cfg.anonKey,
-                    'Authorization': 'Bearer ' + ses.access_token,
-                    'Content-Type': 'application/json'
-                }, opts.headers || {})
-            });
-            if (!res.ok) {
-                const t = await res.text().catch(() => '');
-                throw new Error(`서버 오류 ${res.status} ${t.slice(0, 150)}`);
-            }
-            return res;
+        // ---- 로그인 화면 ----
+        function setLoginStatus(msg) { const el = document.getElementById('login-status'); if (el) el.textContent = msg || ''; }
+        function showLoginModal(msg) {
+            const cfg = getCfg();
+            const fixed = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+            document.getElementById('login-config-box').classList.toggle('hidden', fixed);
+            document.getElementById('login-url').value = cfg ? cfg.url : '';
+            document.getElementById('login-anon').value = cfg ? cfg.anonKey : '';
+            document.getElementById('login-password').value = '';
+            setLoginStatus(msg || '');
+            document.getElementById('login-modal').classList.remove('hidden');
         }
+        function hideLoginModal() { document.getElementById('login-modal').classList.add('hidden'); }
 
-        // ---- 압축 (경로 데이터는 크므로 gzip 후 base64로 보관) ----
-        async function encodePayload(str) {
-            if (typeof CompressionStream === 'undefined') return 'j:' + str;
-            const cs = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
-            const buf = new Uint8Array(await new Response(cs).arrayBuffer());
-            let bin = '';
-            for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-            return 'g:' + btoa(bin);
-        }
-        async function decodePayload(p) {
-            if (p.startsWith('j:')) return p.slice(2);
-            const bin = atob(p.slice(2));
-            const buf = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-            const ds = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
-            return await new Response(ds).text();
-        }
-
-        // ---- 로컬 저수준 작업 (updatedAt/삭제 기록을 건드리지 않음) ----
-        function putRaw(storeName, rec) {
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction([storeName], "readwrite");
-                tx.objectStore(storeName).put(rec);
-                tx.oncomplete = () => resolve();
-                tx.onerror = e => reject(e.target.error);
-                tx.onabort = e => reject(e.target.error);
-            });
-        }
-        function delRaw(storeName, id) {
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction([storeName], "readwrite");
-                tx.objectStore(storeName).delete(id);
-                tx.oncomplete = () => resolve();
-                tx.onerror = e => reject(e.target.error);
-                tx.onabort = e => reject(e.target.error);
-            });
-        }
-        function getAllTombstones() {
-            return new Promise((resolve, reject) => {
-                const req = db.transaction(["tombstones"], "readonly").objectStore("tombstones").getAll();
-                req.onsuccess = () => resolve(req.result || []);
-                req.onerror = e => reject(e.target.error);
-            });
-        }
-        function delTombstone(k) { return delRaw("tombstones", k); }
-
-        // ---- 서버 조회/업로드 ----
-        async function fetchRemoteMeta(table) {
-            const out = [], PAGE = 1000;
-            for (let off = 0; ; off += PAGE) {
-                const res = await sbFetch(`${table}?select=id,updated_at,deleted&order=id.asc&limit=${PAGE}&offset=${off}`);
-                const rows = await res.json();
-                out.push(...rows);
-                if (rows.length < PAGE) break;
-            }
-            return out;
-        }
-        async function pushRow(table, id, updatedAt, deleted, payload) {
-            const ses = await getSyncSessionFresh();
-            const row = { user_id: ses.user_id, id: id, updated_at: updatedAt, deleted: deleted, payload: payload };
-            await sbFetch(`${table}?on_conflict=user_id,id`, {
-                method: 'POST',
-                headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-                body: JSON.stringify(row)
-            });
-        }
-
-        // 한 종류(경로 또는 웨이포인트)를 서버와 맞춘다
-        async function syncKind(storeName, table, stat, changedIds) {
-            const kind = storeName === 'routes' ? 'r' : 'w';
-            const remote = await fetchRemoteMeta(table);
-            const rMap = new Map(remote.map(r => [Number(r.id), { u: Number(r.updated_at), d: !!r.deleted }]));
-            const locals = storeName === 'routes' ? await getAllRoutesFromDB() : await getAllWaypointsFromDB();
-            const lMap = new Map(locals.map(x => [x.id, x]));
-            const tMap = new Map((await getAllTombstones()).filter(t => t.type === kind).map(t => [t.id, t]));
-            const stamp = rec => rec.updatedAt || rec.id; // 옛 데이터는 id(생성 시각 기반)를 수정 시각으로 간주
-
-            const upload = async (rec) => {
-                const json = JSON.stringify(rec);
-                const payload = storeName === 'routes' ? await encodePayload(json) : 'j:' + json;
-                await pushRow(table, rec.id, stamp(rec), false, payload);
-                stat.up++;
-            };
-            const download = async (id) => {
-                const res = await sbFetch(`${table}?id=eq.${id}&select=payload,updated_at,deleted`);
-                const rows = await res.json();
-                const row = rows[0];
-                if (!row || row.deleted || !row.payload) return;
-                const rec = JSON.parse(await decodePayload(row.payload));
-                rec.id = id;
-                rec.updatedAt = Number(row.updated_at);
-                await putRaw(storeName, rec);
-                stat.down++;
-                changedIds.push(id);
-            };
-
-            const ids = new Set([...rMap.keys(), ...lMap.keys(), ...tMap.keys()]);
-            let n = 0;
-            for (const id of ids) {
-                n++;
-                setSyncStatus(`동기화 중... (${storeName === 'routes' ? '경로' : '웨이포인트'} ${n}/${ids.size})`);
-                const r = rMap.get(id), rec = lMap.get(id), t = tMap.get(id);
-                if (rec) {
-                    if (t) await delTombstone(t.k); // 삭제 후 다시 만들어진 항목: 기록 정리
-                    const l = stamp(rec);
-                    if (!r) await upload(rec);
-                    else if (r.d) { if (r.u >= l) { await delRaw(storeName, id); stat.del++; } else await upload(rec); }
-                    else if (r.u > l) await download(id);
-                    else if (r.u < l) await upload(rec);
-                } else if (t) {
-                    if (r && !r.d) {
-                        if (r.u > t.deletedAt) await download(id);                       // 삭제 후 다른 기기에서 수정됨 -> 되살림
-                        else { await pushRow(table, id, t.deletedAt, true, null); stat.up++; } // 삭제 전파
-                    }
-                    await delTombstone(t.k);
-                } else if (r && !r.d) {
-                    await download(id);
-                }
-            }
-        }
-
-        function setSyncStatus(msg) {
-            const el = document.getElementById('sync-status');
-            if (el) el.textContent = msg;
-        }
-        function refreshSyncLastLabel() {
-            const el = document.getElementById('sync-last');
-            if (!el) return;
-            const v = parseInt(localStorage.getItem(SYNC_LAST_KEY));
-            el.textContent = v ? `마지막 동기화: ${formatLogTime(v)}` : '아직 동기화한 적이 없습니다.';
-        }
-
-        function scheduleSync(ms) {
-            if (!isSyncConfigured()) return;
-            clearTimeout(syncTimer);
-            syncTimer = setTimeout(() => syncNow({ silent: true }), ms || 4000);
-        }
-
-        async function syncNow(opts) {
-            opts = opts || {};
-            if (!isSyncConfigured()) { if (!opts.silent) showToast('먼저 동기화 창에서 로그인해 주세요.'); return null; }
-            if (!navigator.onLine) { setSyncStatus('오프라인: 인터넷에 연결되면 동기화합니다.'); if (!opts.silent) showToast('오프라인 상태입니다.'); return null; }
-            if (syncRunning) { syncPending = true; return null; }
-            syncRunning = true;
-            const stat = { up: 0, down: 0, del: 0 }, changedIds = [];
+        async function loginFromUI() {
+            const fixed = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+            const url = (fixed ? SUPABASE_URL : document.getElementById('login-url').value).trim().replace(/\/+$/, '');
+            const anon = (fixed ? SUPABASE_ANON_KEY : document.getElementById('login-anon').value).trim();
+            const email = document.getElementById('login-email').value.trim();
+            const pw = document.getElementById('login-password').value;
+            if (!url || !anon || !email || !pw) { setLoginStatus('주소, 키, 이메일, 비밀번호를 모두 입력해 주세요.'); return; }
             try {
-                if (!db) await initDB();
-                setSyncStatus('동기화 중...');
-                await syncKind('routes', 'gpx_routes', stat, changedIds);
-                await syncKind('waypoints', 'gpx_waypoints', stat, []);
-                localStorage.setItem(SYNC_LAST_KEY, String(Date.now()));
-
-                if (stat.down + stat.del > 0) {
-                    await loadAndRenderAllWaypoints();
-                    if (!document.getElementById('library-modal').classList.contains('hidden')) openLibraryModal();
-                    if (currentRouteData && changedIds.includes(currentRouteData.id)) {
-                        const rec = await getRouteFromDB(currentRouteData.id);
-                        if (rec) currentRouteData.userLog = rec.userLog;
-                    }
-                }
-                const msg = `동기화 완료 (올림 ${stat.up}, 받음 ${stat.down}, 삭제 반영 ${stat.del})`;
-                setSyncStatus(msg);
-                refreshSyncLastLabel();
-                if (!opts.silent || stat.down + stat.del > 0) showToast(msg);
-                return stat;
+                setLoginStatus('로그인 중...');
+                const j = await authRequest(url, anon, 'password', { email, password: pw });
+                if (!fixed) localStorage.setItem(CFG_KEY, JSON.stringify({ url, anonKey: anon }));
+                storeSession(j, null);
+                document.getElementById('login-password').value = '';
+                hideLoginModal();
+                routesCache = null;
+                await startApp();
             } catch (e) {
-                const msg = '동기화 실패: ' + (e && e.message ? e.message : e);
-                setSyncStatus(msg);
-                if (!opts.silent) showToast(msg);
-                return null;
-            } finally {
-                syncRunning = false;
-                if (syncPending) { syncPending = false; scheduleSync(1500); }
+                setLoginStatus('로그인 실패: ' + (e && e.message ? e.message : e));
             }
         }
-        window.addEventListener('online', () => scheduleSync(1500));
-
-        // ---- 동기화 창 UI ----
-        function updateSyncModalView() {
-            const loggedIn = isSyncConfigured();
-            document.getElementById('sync-login-box').classList.toggle('hidden', loggedIn);
-            document.getElementById('sync-account-box').classList.toggle('hidden', !loggedIn);
-            const ses = getSyncSession();
-            document.getElementById('sync-account-email').textContent = loggedIn && ses ? (ses.email || '로그인됨') : '';
-            refreshSyncLastLabel();
+        function logout() {
+            localStorage.removeItem(SES_KEY);
+            localStorage.removeItem('lastViewedRouteId');
+            routesCache = null;
+            location.reload();
         }
-        function openSyncModal() {
-            const cfg = getSyncCfg();
-            document.getElementById('sync-url').value = cfg ? cfg.url : '';
-            document.getElementById('sync-anon').value = cfg ? cfg.anonKey : '';
-            document.getElementById('sync-password').value = '';
-            setSyncStatus('');
-            updateSyncModalView();
-            document.getElementById('sync-modal').classList.remove('hidden');
-        }
-        function closeSyncModal() { document.getElementById('sync-modal').classList.add('hidden'); }
 
-        async function syncLoginFromUI() {
-            const url = document.getElementById('sync-url').value;
-            const anon = document.getElementById('sync-anon').value;
-            const email = document.getElementById('sync-email').value;
-            const pw = document.getElementById('sync-password').value;
-            if (!url.trim() || !anon.trim() || !email.trim() || !pw) { setSyncStatus('주소, 키, 이메일, 비밀번호를 모두 입력해 주세요.'); return; }
+        // ---- 앱 시작 ----
+        async function startApp() {
+            if (appStarted) return;
+            appStarted = true;
             try {
-                setSyncStatus('로그인 중...');
-                await syncLogin(url, anon, email, pw);
-                document.getElementById('sync-password').value = '';
-                updateSyncModalView();
-                await syncNow({});
+                await loadAndRenderAllWaypoints();
+                handleMapZoom();
+                const lastId = localStorage.getItem('lastViewedRouteId');
+                if (lastId) await openRouteById(parseInt(lastId));
             } catch (e) {
-                setSyncStatus('로그인 실패: ' + (e && e.message ? e.message : e));
+                appStarted = false;
+                showToast('불러오기 실패: ' + (e && e.message ? e.message : e));
             }
-        }
-        function syncLogout() {
-            localStorage.removeItem(SYNC_SESSION_KEY);
-            clearTimeout(syncTimer);
-            updateSyncModalView();
-            setSyncStatus('로그아웃했습니다. 이 기기의 데이터는 그대로 남아 있습니다.');
         }
 
         async function backupLibraryData() {
             try {
-                const routes = await getAllRoutesFromDB();
+                const list = await getAllRoutesFromDB(true);
                 const waypoints = await getAllWaypointsFromDB();
-                if (routes.length === 0 && waypoints.length === 0) {
+                if (list.length === 0 && waypoints.length === 0) {
                     showToast("백업할 데이터가 없습니다.");
                     return;
+                }
+                const routes = [];
+                for (let i = 0; i < list.length; i++) {
+                    showToast(`백업 준비 중... (${i + 1}/${list.length})`);
+                    const full = await getRouteFromDB(list[i].id);
+                    if (full) { delete full.overview; routes.push(full); }
                 }
                 const backupData = { routes, waypoints };
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData));
@@ -850,7 +693,10 @@
                         importedWaypoints = parsed.waypoints || [];
                     }
 
+                    let n = 0;
                     for (let rt of importedRoutes) {
+                        n++;
+                        showToast(`서버에 올리는 중... (경로 ${n}/${importedRoutes.length})`);
                         rt.id = null;
                         await saveRouteToDB(rt);
                     }
@@ -885,6 +731,7 @@
                     const parsed = parseGPX(xmlDoc, file.name);
                     if (parsed.points.length === 0) throw new Error("유효한 트랙 데이터가 없습니다.");
                     
+                    showToast("서버에 저장하는 중...");
                     parsed.id = await saveRouteToDB(parsed);
                     showToast(`"${file.name}" 저장 및 로드 완료!`);
                     displayRoute(parsed);
@@ -1472,8 +1319,11 @@
         async function openLibraryModal() {
             document.getElementById('library-search').value = '';
             
-            const routes = await getAllRoutesFromDB();
             const list = document.getElementById('library-list-content');
+            list.innerHTML = '<p class="text-gray-400 text-center py-6">불러오는 중...</p>';
+            let routes;
+            try { routes = await getAllRoutesFromDB(true); }
+            catch (e) { list.innerHTML = `<p class="text-red-300 text-center py-6 text-sm">${e.message}</p>`; return; }
             list.innerHTML = '';
             
             if (routes.length === 0) {
@@ -1498,7 +1348,7 @@
                         const infoDiv = document.createElement('div');
                         infoDiv.className = 'truncate flex-1 cursor-pointer';
                         infoDiv.innerHTML = `<p class="text-sm text-white truncate hover:text-blue-300 transition">${rt.name}</p><p class="text-xs text-gray-400">${(rt.totalDist/1000).toFixed(2)}km</p>`;
-                        infoDiv.onclick = () => { displayRoute(rt); closeLibraryModal(); };
+                        infoDiv.onclick = () => { openRouteById(rt.id); closeLibraryModal(); };
 
                         const btnDiv = document.createElement('div');
                         btnDiv.className = 'flex space-x-2 shrink-0 ml-3';
@@ -1506,7 +1356,7 @@
                         const openBtn = document.createElement('button');
                         openBtn.className = 'bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg transition';
                         openBtn.innerText = '열기';
-                        openBtn.onclick = () => { displayRoute(rt); closeLibraryModal(); };
+                        openBtn.onclick = () => { openRouteById(rt.id); closeLibraryModal(); };
 
                         const delBtn = document.createElement('button');
                         delBtn.className = 'bg-red-600 hover:bg-red-500 text-white text-xs px-3 py-1.5 rounded-lg transition';
@@ -1587,7 +1437,9 @@
         map.on('popupclose', e => { if (e.popup === routePopup) clearRouteHighlight(); });
 
         async function showAllRoutes() {
-            const routes = await getAllRoutesFromDB();
+            let routes;
+            try { routes = await getAllRoutesFromDB(true); }
+            catch (e) { showToast('불러오기 실패: ' + e.message); return; }
             if (routes.length === 0) { showToast("경로가 없습니다."); return; }
             
             isShowAllMode = true;
@@ -1603,7 +1455,7 @@
             let totalBounds = L.latLngBounds();
             
             routes.forEach(r => {
-                const latlngs = r.points.map(p => [p.lat, p.lon]);
+                const latlngs = (r.overview || []).map(p => [p[0], p[1]]);
                 if (latlngs.length === 0) return;
                 
                 const line = L.polyline(latlngs, { ...ROUTE_STYLE, renderer: allRoutesRenderer, bubblingMouseEvents: false });
@@ -1747,10 +1599,8 @@
                 updatedAt: Date.now()
             };
             try {
-                if (!currentRouteData.id) currentRouteData.id = await saveRouteToDB(currentRouteData);
-                const rec = (await getRouteFromDB(currentRouteData.id)) || JSON.parse(JSON.stringify(currentRouteData));
-                rec.userLog = log;
-                await saveRouteToDB(rec);
+                if (!currentRouteData.id) throw new Error('저장된 경로가 아닙니다.');
+                await saveRouteUserLogToDB(currentRouteData.id, log);
                 currentRouteData.userLog = log;
                 document.getElementById('log-saved-at').textContent = `마지막 저장: ${formatLogTime(log.updatedAt)}`;
                 showToast('기록이 저장되었습니다.');
@@ -1983,19 +1833,7 @@
                 .openOn(map);
         }
 
-        initDB().then(async () => {
-            await loadAndRenderAllWaypoints();
-            handleMapZoom();
-
-            const lastId = localStorage.getItem('lastViewedRouteId');
-            if (lastId) {
-                const routes = await getAllRoutesFromDB();
-                const lastRoute = routes.find(r => r.id === parseInt(lastId));
-                if (lastRoute) displayRoute(lastRoute);
-            }
-            // 클라우드 동기화가 설정되어 있으면 백그라운드로 동기화
-            if (isSyncConfigured()) syncNow({ silent: true });
-        });
+        if (isLoggedIn()) { startApp(); } else { showLoginModal(); }
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
