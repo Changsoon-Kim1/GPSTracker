@@ -297,8 +297,8 @@
         let sectionLayerGroup = L.layerGroup().addTo(map);
         let steepMarkersLayerGroup = L.layerGroup().addTo(map);
         let restMarkersLayerGroup = L.layerGroup().addTo(map);
-        // 3~5분 짧은 휴식 아이콘: 지도 레벨 16 이상에서만 보이고, 15 이하로 내려가면 사라진다
-        const REST_SHORT_MIN_ZOOM = 16;
+        // 3~5분 짧은 휴식 아이콘: 지도 레벨 17 이상에서만 보이고, 16 이하로 내려가면 사라진다
+        const REST_SHORT_MIN_ZOOM = 17;
         let restShortLayerGroup = L.layerGroup();
         function clearRestMarkers() { restMarkersLayerGroup.clearLayers(); restShortLayerGroup.clearLayers(); }
         function updateRestShortVisibility() {
