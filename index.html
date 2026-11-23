@@ -813,7 +813,7 @@
         function parseGPX(xmlDoc, fileName) {
             const trkpts = xmlDoc.getElementsByTagName("trkpt");
             let points = [];
-            let totalDist = 0, totalAscent = 0, totalDescent = 0, prevPt = null;
+            let totalDist = 0, prevPt = null;
 
             for (let i = 0; i < trkpts.length; i++) {
                 const pt = trkpts[i];
@@ -828,9 +828,6 @@
                 if (prevPt) {
                     const dist = getDistance(prevPt.lat, prevPt.lon, lat, lon);
                     totalDist += dist;
-                    const eleDiff = ele - prevPt.ele;
-                    if (eleDiff > 0) totalAscent += eleDiff;
-                    else totalDescent += Math.abs(eleDiff);
                 }
                 points.push({ lat, lon, ele, time, cumDist: totalDist, speed: 0, gradient: 0 });
                 prevPt = { lat, lon, ele, time, cumDist: totalDist };
@@ -838,7 +835,87 @@
 
             let year = 'Unknown';
             if (points.length > 0 && points[0].time) year = new Date(points[0].time).getFullYear().toString();
-            return { id: null, name: fileName, year, points, totalDist, totalAscent, totalDescent };
+            const ad = calcAscentDescentFromPoints(points);
+            return { id: null, name: fileName, year, points, totalDist, totalAscent: ad.asc, totalDescent: ad.desc };
+        }
+
+        // ---- 고도·휴식 계산 기준 (상세 통계, 구간 분석, 칼로리, 휴식 아이콘이 모두 같은 기준 사용) ----
+        const ELE_SMOOTH_HALF_WIN_M = 15; // 고도를 앞뒤 15m(총 30m) 구간 평균으로 평활화
+        const ASCENT_DEADBAND_M = 2;      // 기준 고도에서 이 값(m) 이상 변해야 오르내림으로 인정
+        const REST_RADIUS_M = 30;         // 이 반경(m) 안에 머물면 정지로 본다
+        const REST_MIN_STOP_SEC = 180;    // 정지가 이 시간(초) 이상이면 휴식 (기록이 이만큼 끊긴 구간도 휴식)
+
+        // 이동 거리(cumDist) 기준 앞뒤 halfWin(m) 이동 평균으로 고도 잡음 완화
+        function smoothElevation(pts, halfWin) {
+            const n = pts.length, out = new Array(n);
+            let lo = 0, hi = 0, sum = 0;
+            for (let i = 0; i < n; i++) {
+                const c = pts[i].cumDist;
+                while (hi < n && pts[hi].cumDist <= c + halfWin) { sum += pts[hi].ele; hi++; }
+                while (lo < hi && pts[lo].cumDist < c - halfWin) { sum -= pts[lo].ele; lo++; }
+                out[i] = sum / (hi - lo);
+            }
+            return out;
+        }
+
+        // 불감대 방식 상승/하강: 기준 고도에서 band(m) 이상 변해야 반영하고 기준을 옮김
+        function computeAscentDescent(eles, band) {
+            let asc = 0, desc = 0;
+            if (!eles || eles.length < 2) return { asc, desc };
+            let ref = eles[0];
+            for (let i = 1; i < eles.length; i++) {
+                const d = eles[i] - ref;
+                if (d >= band) { asc += d; ref = eles[i]; }
+                else if (-d >= band) { desc -= d; ref = eles[i]; }
+            }
+            return { asc, desc };
+        }
+
+        function calcAscentDescentFromPoints(pts) {
+            if (!pts || pts.length < 2) return { asc: 0, desc: 0 };
+            return computeAscentDescent(smoothElevation(pts, ELE_SMOOTH_HALF_WIN_M), ASCENT_DEADBAND_M);
+        }
+
+        // 휴식 구간 찾기: (1) 반경 REST_RADIUS_M 안에 REST_MIN_STOP_SEC 이상 머문 곳, (2) 기록이 그만큼 끊긴 곳. 겹치면 합침.
+        const restCache = new WeakMap();
+        function getRests(pts) {
+            if (!pts) return [];
+            if (restCache.has(pts)) return restCache.get(pts);
+            const n = pts.length, raw = [];
+            let i = 0;
+            while (i < n - 1) {
+                if (!pts[i].time) { i++; continue; }
+                let j = i;
+                while (j + 1 < n && pts[j + 1].time && pts[j + 1].time - pts[j].time < 86400000 &&
+                       getDistance(pts[i].lat, pts[i].lon, pts[j + 1].lat, pts[j + 1].lon) <= REST_RADIUS_M) j++;
+                if (j > i && (pts[j].time - pts[i].time) / 1000 >= REST_MIN_STOP_SEC) { raw.push({ s: pts[i].time, e: pts[j].time, idx: i }); i = j + 1; }
+                else i++;
+            }
+            for (let k = 1; k < n; k++) {
+                if (!pts[k].time || !pts[k - 1].time) continue;
+                const ds = (pts[k].time - pts[k - 1].time) / 1000;
+                if (ds >= REST_MIN_STOP_SEC && ds < 86400) raw.push({ s: pts[k - 1].time, e: pts[k].time, idx: k - 1 });
+            }
+            raw.sort((a, b) => a.s - b.s);
+            const out = [];
+            for (const r of raw) {
+                const last = out[out.length - 1];
+                if (last && r.s <= last.endMs) { if (r.e > last.endMs) { last.endMs = r.e; last.sec = (last.endMs - last.startMs) / 1000; } }
+                else out.push({ startMs: r.s, endMs: r.e, sec: (r.e - r.s) / 1000, lat: pts[r.idx].lat, lon: pts[r.idx].lon });
+            }
+            restCache.set(pts, out);
+            return out;
+        }
+
+        // 시간 구간 [t0, t1]과 겹치는 휴식 시간(ms)
+        function restOverlapMs(rests, t0, t1) {
+            let ov = 0;
+            for (const r of rests) {
+                if (r.endMs <= t0) continue;
+                if (r.startMs >= t1) break;
+                ov += Math.min(r.endMs, t1) - Math.max(r.startMs, t0);
+            }
+            return ov;
         }
 
         function getDistance(lat1, lon1, lat2, lon2) {
@@ -896,27 +973,28 @@
                 iconSize: [0, 0],
                 iconAnchor: [0, 0]
             });
-            for (let i = 1; i < pts.length; i++) {
-                const a = pts[i - 1], b = pts[i];
-                if (!a.time || !b.time) continue;
-                const ds = (b.time - a.time) / 1000;
-                if (ds >= REST_MIN_SEC && ds < 86400) {
-                    const m = L.marker([a.lat, a.lon], { icon: restIcon, zIndexOffset: 700, keyboard: false });
-                    m.bindPopup(
-                        `<div class="text-center">
-                            <div class="text-[11px] text-gray-400">휴식</div>
-                            <div class="font-bold text-indigo-300 text-sm">${formatRestDuration(ds)}</div>
-                            <div class="text-[10px] text-gray-400 mt-0.5">${formatClock(a.time)} ~ ${formatClock(b.time)}</div>
-                        </div>`,
-                        { className: 'rest-popup', autoPan: false, closeButton: false, offset: [0, -6] }
-                    );
-                    m.addTo(restMarkersLayerGroup);
-                }
+            for (const r of getRests(pts)) {
+                if (r.sec < REST_MIN_SEC) continue;
+                const m = L.marker([r.lat, r.lon], { icon: restIcon, zIndexOffset: 700, keyboard: false });
+                m.bindPopup(
+                    `<div class="text-center">
+                        <div class="text-[11px] text-gray-400">휴식</div>
+                        <div class="font-bold text-indigo-300 text-sm">${formatRestDuration(r.sec)}</div>
+                        <div class="text-[10px] text-gray-400 mt-0.5">${formatClock(r.startMs)} ~ ${formatClock(r.endMs)}</div>
+                    </div>`,
+                    { className: 'rest-popup', autoPan: false, closeButton: false, offset: [0, -6] }
+                );
+                m.addTo(restMarkersLayerGroup);
             }
         }
 
         function displayRoute(route) {
             isShowAllMode = false;
+            // 저장된 경로도 열 때마다 현재 기준으로 상승/하강을 다시 계산
+            if (route.points && route.points.length > 1) {
+                const ad = calcAscentDescentFromPoints(route.points);
+                route.totalAscent = ad.asc; route.totalDescent = ad.desc;
+            }
             currentRouteData = route;
             allRoutesLayerGroup.clearLayers();
             steepMarkersLayerGroup.clearLayers();
@@ -1083,17 +1161,16 @@
             const hasTime = startPt.time && endPt.time;
             if (hasTime) {
                 elapsedMs = Math.abs(endPt.time - startPt.time);
+                const rests = getRests(currentRouteData.points); // 상세 통계와 동일한 휴식 기준
                 for (let i = 1; i < secPts.length; i++) {
                     const a = secPts[i-1], b = secPts[i];
                     if (!a.time || !b.time) continue;
-                    const ds = (b.time - a.time) / 1000;
-                    // 상세 통계와 동일 기준: 180초 이상 정지는 휴식으로 간주
-                    if (ds > 0 && ds < 180) {
-                        movingMs += ds * 1000;
-                        movingM += (b.cumDist - a.cumDist);
-                    } else if (ds >= 180 && ds < 86400) {
-                        restMs += ds * 1000; // 휴식 시간 합계 (상세 통계와 같은 기준)
-                    }
+                    const dsMs = b.time - a.time;
+                    if (dsMs <= 0 || dsMs >= 86400000) continue;
+                    const ov = restOverlapMs(rests, a.time, b.time);
+                    restMs += ov;
+                    movingMs += dsMs - ov;
+                    movingM += (b.cumDist - a.cumDist) * (dsMs - ov) / dsMs;
                 }
                 for (const p of secPts) { if (p.speed > maxSpeed) maxSpeed = p.speed; }
             }
@@ -1572,49 +1649,11 @@
         const ML_O2_PER_KG_PER_M_HORIZ = 0.1;
         const ML_O2_PER_KG_PER_M_ASCENT = 1.8;
         const REST_KCAL_PER_KG_HOUR = 3.5 * 60 * KCAL_PER_ML_O2; // 1 MET = 1.05 kcal/kg/h
-        const ASCENT_DEADBAND_M = 3;      // 이 값(m) 미만의 오르내림은 고도 잡음으로 보고 무시
-        const ELE_SMOOTH_HALF_WIN_M = 15; // 고도를 앞뒤 15m 구간 평균으로 평활화
         let energyCache = null;
-
-        // 이동 거리(cumDist) 기준 앞뒤 halfWin(m) 이동 평균으로 고도 잡음 완화
-        function smoothElevation(pts, halfWin) {
-            const n = pts.length, out = new Array(n);
-            let lo = 0, hi = 0, sum = 0;
-            for (let i = 0; i < n; i++) {
-                const c = pts[i].cumDist;
-                while (hi < n && pts[hi].cumDist <= c + halfWin) { sum += pts[hi].ele; hi++; }
-                while (lo < hi && pts[lo].cumDist < c - halfWin) { sum -= pts[lo].ele; lo++; }
-                out[i] = sum / (hi - lo);
-            }
-            return out;
-        }
-
-        // 지그재그(데드밴드) 방식 상승/하강 계산: 반대 방향으로 band(m) 이상 움직여야 방향 전환으로 인정
-        function computeAscentDescent(eles, band) {
-            let asc = 0, desc = 0;
-            if (!eles || eles.length < 2) return { asc, desc };
-            let last = eles[0], ext = last, dir = 0;
-            for (let i = 1; i < eles.length; i++) {
-                const e = eles[i];
-                if (dir === 0) {
-                    if (e - last >= band) { dir = 1; ext = e; }
-                    else if (last - e >= band) { dir = -1; ext = e; }
-                } else if (dir === 1) {
-                    if (e > ext) ext = e;
-                    else if (ext - e >= band) { asc += ext - last; last = ext; dir = -1; ext = e; }
-                } else {
-                    if (e < ext) ext = e;
-                    else if (e - ext >= band) { desc += last - ext; last = ext; dir = 1; ext = e; }
-                }
-            }
-            if (dir === 1) asc += ext - last;
-            else if (dir === -1) desc += last - ext;
-            return { asc, desc };
-        }
 
         function computeEnergyProfile(pts, hours) {
             const distM = pts && pts.length ? pts[pts.length - 1].cumDist : 0;
-            const ad = computeAscentDescent(smoothElevation(pts, ELE_SMOOTH_HALF_WIN_M), ASCENT_DEADBAND_M);
+            const ad = calcAscentDescentFromPoints(pts);
             return { distM, ascentM: ad.asc, descentM: ad.desc, hours: hours || 0 };
         }
 
@@ -1686,12 +1725,14 @@
             if (!currentRouteData) return;
             const pts = currentRouteData.points;
             let tt = 0, mt = 0, rt = 0;
-            const restMinList = []; // 3분 이상 휴식 각각의 시간(분), 시간 순서
+            const rests = getRests(pts);
+            const restMinList = rests.map(r => Math.round(r.sec / 60)); // 3분 이상 휴식 각각의 시간(분), 시간 순서
+            for (const r of rests) rt += r.endMs - r.startMs;
             if (pts.length > 0 && pts[0].time && pts[pts.length-1].time) tt = pts[pts.length-1].time - pts[0].time;
             for (let i=1; i<pts.length; i++) {
                 if (pts[i].time && pts[i-1].time) {
-                    const ds = (pts[i].time - pts[i-1].time)/1000;
-                    if (ds > 0 && ds < 86400) { if (ds >= 180) { rt += ds*1000; restMinList.push(Math.round(ds/60)); } else mt += ds*1000; }
+                    const dsMs = pts[i].time - pts[i-1].time;
+                    if (dsMs > 0 && dsMs < 86400000) mt += dsMs - restOverlapMs(rests, pts[i-1].time, pts[i].time);
                 }
             }
             const dKm = currentRouteData.totalDist / 1000;
