@@ -1481,6 +1481,19 @@
             } else {
                 const grouped = {};
                 routes.forEach(r => { const y = r.year || 'Unknown'; if(!grouped[y]) grouped[y] = []; grouped[y].push(r); });
+                // 파일 이름에 들어 있는 날짜 기준 최신순 (날짜가 없으면 맨 아래, 이름 역순)
+                const nameDateKey = (name) => {
+                    const n = String(name || '');
+                    let m = n.match(/(20\d\d)[-._]?(\d\d)[-._]?(\d\d)/);
+                    if (m) return +(m[1] + m[2] + m[3]);
+                    m = n.match(/(?<!\d)(\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!\d)/);
+                    if (m) return +('20' + m[1] + m[2] + m[3]);
+                    m = n.match(/(?:^|\D)(\d\d)[._-](\d\d)(?!\d)/);
+                    if (m) return +('20' + m[1] + m[2] + '00');
+                    return 0;
+                };
+                Object.values(grouped).forEach(arr => arr.sort((a, b) =>
+                    (nameDateKey(b.name) - nameDateKey(a.name)) || String(b.name).localeCompare(String(a.name), 'ko', { numeric: true })));
                 
                 Object.keys(grouped).sort((a,b)=>b.localeCompare(a)).forEach(yr => {
                     const sec = document.createElement('div');
