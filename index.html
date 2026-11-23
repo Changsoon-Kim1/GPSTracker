@@ -883,7 +883,7 @@
         // ---- 고도·휴식 계산 기준 (상세 통계, 구간 분석, 칼로리, 휴식 아이콘이 모두 같은 기준 사용) ----
         const ELE_SMOOTH_HALF_WIN_M = 15; // 고도를 앞뒤 15m(총 30m) 구간 평균으로 평활화
         const ASCENT_DEADBAND_M = 2;      // 기준 고도에서 이 값(m) 이상 변해야 오르내림으로 인정
-        const REST_RADIUS_M = 30;         // 이 반경(m) 안에 머물면 정지로 본다
+        const REST_RADIUS_M = 24;         // 이 반경(m) 안에 머물면 정지로 본다
         const REST_MIN_STOP_SEC = 180;    // 정지가 이 시간(초) 이상이면 휴식 (기록이 이만큼 끊긴 구간도 휴식)
 
         // 이동 거리(cumDist) 기준 앞뒤 halfWin(m) 이동 평균으로 고도 잡음 완화
