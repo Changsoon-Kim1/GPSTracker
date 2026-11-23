@@ -127,13 +127,14 @@
         </div>
 
         <!-- 지도 확대/축소 버튼 -->
-        <div id="zoom-controls" class="flex flex-col space-y-3">
-            <button onclick="map.zoomIn()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Zoom In">
+        <div id="zoom-controls" class="flex flex-col space-y-3 relative">
+            <button onclick="zoomByButton(1)" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Zoom In">
                 <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14m-7-7h14"></path></svg>
             </button>
-            <button onclick="map.zoomOut()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Zoom Out">
+            <button onclick="zoomByButton(-1)" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Zoom Out">
                 <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14"></path></svg>
             </button>
+            <div id="zoom-level-bubble" class="absolute right-12 top-1 px-3 py-1.5 rounded-full bg-gray-900/95 text-white text-sm font-bold border border-sky-500 shadow-lg whitespace-nowrap pointer-events-none transition-opacity duration-300 opacity-0" style="margin:0"></div>
             <button onclick="cycleBaseMap()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="지도 종류 바꾸기">
                 <svg class="w-5 h-5 text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l9 5-9 5-9-5 9-5zm-9 9l9 5 9-5m-18 4l9 5 9-5"></path></svg>
             </button>
@@ -352,6 +353,23 @@
             if (currentRouteData) drawGraph(currentScrubDist);
         }
         window.addEventListener('resize', resizeCanvas);
+
+        // + / - 버튼으로 확대·축소하면 현재 지도 레벨을 1초 정도 말풍선으로 표시
+        function showZoomBubble(z) {
+            const el = document.getElementById('zoom-level-bubble');
+            if (!el) return;
+            el.textContent = `${z}레벨`;
+            el.classList.remove('opacity-0');
+            clearTimeout(showZoomBubble._t);
+            showZoomBubble._t = setTimeout(() => el.classList.add('opacity-0'), 1000);
+        }
+        function zoomByButton(delta) {
+            const z = map.getZoom();
+            const target = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), z + delta));
+            if (target === z) { showZoomBubble(z); return; } // 더 이상 확대/축소 불가: 현재 레벨만 표시
+            map.once('zoomend', () => showZoomBubble(map.getZoom()));
+            if (delta > 0) map.zoomIn(); else map.zoomOut();
+        }
 
         function showToast(msg) {
             const toast = document.getElementById('toast');
