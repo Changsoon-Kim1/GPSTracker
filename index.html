@@ -527,7 +527,8 @@
             return out;
         }
 
-        const ROUTE_LIST_COLS = 'id,name,year,total_dist,total_ascent,total_descent,overview,user_log,updated_at';
+        // 목록에는 '전체 경로 보기'용 요약선(overview, 경로당 약 7KB)을 넣지 않는다. 필요할 때만 fillOverviews()로 받아 온다.
+        const ROUTE_LIST_COLS = 'id,name,year,total_dist,total_ascent,total_descent,user_log,updated_at';
         function rowToListRoute(r) {
             return {
                 id: Number(r.id), name: r.name, year: r.year || 'Unknown',
@@ -548,6 +549,24 @@
             }
             routesCache = out;
             return out;
+        }
+
+        // 전체 경로 보기용 요약선: 아직 없거나 바뀐 경로만 서버에서 받아 routes[].overview 에 채운다
+        const overviewCache = new Map(); // id -> { u: updatedAt, ov: [[lat, lon], ...] }
+        async function fillOverviews(routes) {
+            const need = routes.filter(r => { const c = overviewCache.get(r.id); return !c || c.u !== r.updatedAt; });
+            const byId = new Map(need.map(r => [r.id, r]));
+            const CHUNK = 100;
+            for (let i = 0; i < need.length; i += CHUNK) {
+                const ids = need.slice(i, i + CHUNK).map(r => r.id).join(',');
+                const res = await sbFetch(`gpx_tracks?select=id,overview&id=in.(${ids})`);
+                const rows = await res.json();
+                for (const row of rows) {
+                    const r = byId.get(Number(row.id));
+                    if (r) overviewCache.set(r.id, { u: r.updatedAt, ov: row.overview || [] });
+                }
+            }
+            routes.forEach(r => { const c = overviewCache.get(r.id); r.overview = c ? c.ov : []; });
         }
 
         // 점 데이터까지 포함한 경로 1개 (경로를 열 때 사용)
@@ -1507,14 +1526,9 @@
             });
         }
 
-        async function openLibraryModal() {
-            document.getElementById('library-search').value = '';
-            
+        // 경로 목록 화면 그리기 (목록 데이터만 필요)
+        function renderLibraryList(routes) {
             const list = document.getElementById('library-list-content');
-            list.innerHTML = '<p class="text-gray-400 text-center py-6">불러오는 중...</p>';
-            let routes;
-            try { routes = await getAllRoutesFromDB(true); }
-            catch (e) { list.innerHTML = `<p class="text-red-300 text-center py-6 text-sm">${e.message}</p>`; return; }
             list.innerHTML = '';
             
             if (routes.length === 0) {
@@ -1600,7 +1614,30 @@
                     list.appendChild(sec);
                 });
             }
+            filterLibrary(); // 검색어가 있으면 다시 적용
+        }
+
+        // 팝업은 즉시 열고, 목록은 불러오는 대로 채운다. 이미 받아 둔 목록이 있으면 먼저 보여 주고 뒤에서 새로 받아 바뀐 경우에만 다시 그린다.
+        let libraryLoadSeq = 0;
+        const librarySig = rs => rs.map(r => `${r.id}|${r.name}|${r.totalDist}|${r.updatedAt}`).join(';');
+        async function openLibraryModal() {
+            const seq = ++libraryLoadSeq;
+            document.getElementById('library-search').value = '';
+            const list = document.getElementById('library-list-content');
             document.getElementById('library-modal').classList.remove('hidden');
+            let shownSig = null;
+            if (routesCache) { renderLibraryList(routesCache); shownSig = librarySig(routesCache); }
+            else list.innerHTML = '<p class="text-gray-400 text-center py-6">불러오는 중...</p>';
+            let routes;
+            try { routes = await getAllRoutesFromDB(true); }
+            catch (e) {
+                if (seq !== libraryLoadSeq) return;
+                if (shownSig === null) list.innerHTML = `<p class="text-red-300 text-center py-6 text-sm">${e.message}</p>`;
+                else showToast('목록 새로고침 실패: ' + e.message);
+                return;
+            }
+            if (seq !== libraryLoadSeq) return;
+            if (librarySig(routes) !== shownSig) renderLibraryList(routes);
         }
         function closeLibraryModal() { document.getElementById('library-modal').classList.add('hidden'); }
 
@@ -1642,7 +1679,11 @@
 
         async function showAllRoutes() {
             let routes;
-            try { routes = await getAllRoutesFromDB(true); }
+            try {
+                routes = await getAllRoutesFromDB(true);
+                if (routes.length > 0 && routes.some(r => !overviewCache.has(r.id) || overviewCache.get(r.id).u !== r.updatedAt)) showToast('경로를 불러오는 중...');
+                await fillOverviews(routes);
+            }
             catch (e) { showToast('불러오기 실패: ' + e.message); return; }
             if (routes.length === 0) { showToast("경로가 없습니다."); return; }
             
