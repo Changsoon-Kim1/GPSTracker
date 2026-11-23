@@ -297,6 +297,16 @@
         let sectionLayerGroup = L.layerGroup().addTo(map);
         let steepMarkersLayerGroup = L.layerGroup().addTo(map);
         let restMarkersLayerGroup = L.layerGroup().addTo(map);
+        // 3~5분 짧은 휴식 아이콘: 지도 레벨 18 이상에서만 보이고, 17 이하로 내려가면 사라진다
+        const REST_SHORT_MIN_ZOOM = 18;
+        let restShortLayerGroup = L.layerGroup();
+        function clearRestMarkers() { restMarkersLayerGroup.clearLayers(); restShortLayerGroup.clearLayers(); }
+        function updateRestShortVisibility() {
+            const show = map.getZoom() >= REST_SHORT_MIN_ZOOM;
+            if (show && !map.hasLayer(restShortLayerGroup)) restShortLayerGroup.addTo(map);
+            else if (!show && map.hasLayer(restShortLayerGroup)) map.removeLayer(restShortLayerGroup);
+        }
+        map.on('zoomend', updateRestShortVisibility);
 
         // 전체 경로 보기: 캔버스 렌더러(터치 허용 범위 12px) + 선택 상태
         const allRoutesRenderer = L.canvas({ tolerance: 12, padding: 0.5 });
@@ -997,7 +1007,7 @@
             return new Date(ms).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
         }
         function drawRestMarkers(pts) {
-            restMarkersLayerGroup.clearLayers();
+            clearRestMarkers();
             const restIcon = L.divIcon({
                 className: 'bg-transparent border-none',
                 html: `<div style="width:18px;height:18px;margin:-9px 0 0 -9px;" class="flex items-center justify-center rounded-full bg-indigo-600/95 border border-white shadow-md text-[10px] leading-none">☕</div>`,
@@ -1005,7 +1015,6 @@
                 iconAnchor: [0, 0]
             });
             for (const r of getRests(pts)) {
-                if (r.sec < REST_MIN_SEC) continue;
                 const m = L.marker([r.lat, r.lon], { icon: restIcon, zIndexOffset: 700, keyboard: false });
                 m.bindPopup(
                     `<div class="text-center">
@@ -1015,8 +1024,9 @@
                     </div>`,
                     { className: 'rest-popup', autoPan: false, closeButton: false, offset: [0, -6] }
                 );
-                m.addTo(restMarkersLayerGroup);
+                m.addTo(r.sec >= REST_MIN_SEC ? restMarkersLayerGroup : restShortLayerGroup);
             }
+            updateRestShortVisibility();
         }
 
         function displayRoute(route) {
@@ -1029,7 +1039,7 @@
             currentRouteData = route;
             allRoutesLayerGroup.clearLayers();
             steepMarkersLayerGroup.clearLayers();
-            restMarkersLayerGroup.clearLayers();
+            clearRestMarkers();
             map.closePopup();
             resetSectionAnalysis();
 
@@ -1567,7 +1577,7 @@
                                         currentRouteData = null;
                                         resetSectionAnalysis();
                                         steepMarkersLayerGroup.clearLayers();
-                                        restMarkersLayerGroup.clearLayers();
+                                        clearRestMarkers();
                                         document.getElementById('graph-container').classList.add('hidden');
                                         document.getElementById('graph-container').classList.remove('flex');
                                         document.getElementById('top-right-controls').style.display = 'none';
@@ -1642,7 +1652,7 @@
             if (scrubberMarker) { map.removeLayer(scrubberMarker); scrubberMarker = null; }
             allRoutesLayerGroup.clearLayers();
             steepMarkersLayerGroup.clearLayers(); 
-            restMarkersLayerGroup.clearLayers();
+            clearRestMarkers();
             map.closePopup();
             resetSectionAnalysis();
             
