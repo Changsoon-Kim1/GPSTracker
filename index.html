@@ -230,6 +230,118 @@
     </div>
 
     <!-- 토스트 메시지 -->
+    <!-- 사진 앨범 리포트 (열려 있는 경로 + 사진으로 만드는 화면. 사진은 서버로 보내지 않음) -->
+    <style id="albumCss">
+#album-modal { position: fixed; inset: 0; z-index: 2600; overflow-y: auto; -webkit-overflow-scrolling: touch; -webkit-text-size-adjust: 100%; }
+#album-modal.hidden { display: none; }
+#album-modal.al-saved { position: static; overflow: visible; min-height: 100vh; }
+#album-modal *::before, #album-modal *::after { box-sizing: border-box; }
+#album-modal h1, #album-modal h2 { font-weight: 700; }
+#album-modal button { font-family: inherit; }
+#album-modal {--ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --brand:#0f766e; --brand-dark:#115e59;}
+#album-modal * {box-sizing: border-box;}
+#album-modal {margin: 0; font: 15px/1.5 -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; color: var(--ink); background: #e2e8f0;}
+#album-modal .al-wrap {max-width: 820px; margin: 0 auto; padding: 6px 2px;}
+#album-modal .card {background: #fff; border-radius: 14px; padding: 16px; margin-bottom: 12px;}
+#album-modal h1 {margin: 0 0 4px; font-size: 20px;}
+#album-modal h2 {margin: 0 0 8px; font-size: 15px; color: var(--brand-dark); border-bottom: 2px solid var(--brand); padding-bottom: 4px;}
+#album-modal .muted {color: var(--muted);}
+#album-modal .sm {font-size: 12.5px;}
+#album-modal .privacy {background: #f0fdfa; border-radius: 10px; padding: 8px 10px; font-size: 13px; margin: 8px 0 12px;}
+#album-modal label {display: block; font-weight: 600; font-size: 13.5px; margin: 10px 0 4px;}
+#album-modal input[type=text], #album-modal input[type=number], #album-modal select {width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fff;}
+#album-modal input[type=file] {width: 100%; padding: 8px; border: 1px dashed #94a3b8; border-radius: 10px; background: #f8fafc; font: inherit;}
+#album-modal .two {display: grid; grid-template-columns: 1fr 1fr; gap: 10px;}
+#album-modal .btn {display: inline-block; padding: 10px 14px; border: 1px solid var(--line); background: #fff; border-radius: 10px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; color: var(--ink);}
+#album-modal .btn.primary {background: var(--brand); border-color: var(--brand); color: #fff;}
+#album-modal .btn:disabled {opacity: .5;}
+#album-modal .bar {display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;}
+#album-modal #al-progress {margin-top: 8px; font-size: 13px; color: var(--muted);}
+#album-modal .err {color: #dc2626; font-size: 13px; margin-top: 8px;}
+#album-modal .rp {background: #fff; border-radius: 10px; padding: 16px 6px 20px;}
+#album-modal .rp-sub {color: var(--muted); font-size: 13px;}
+#album-modal .rp-sec {margin-top: 18px;}
+#album-modal .stats {display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;}
+#album-modal .stats div {background: #f0fdfa; border-radius: 10px; padding: 8px; text-align: center;}
+#album-modal .stats small {display: block; color: var(--muted); font-size: 11px;}
+#album-modal .stats b {font-size: 15px;}
+#album-modal svg.map, #album-modal svg.elev {width: 100%; height: auto; display: block; background: #f8fafc; border: 1px solid var(--line); border-radius: 10px;}
+#album-modal .story {margin-top: 20px;}
+#album-modal .chap {position: relative; margin: 0 0 18px; padding: 0; break-inside: avoid;}
+#album-modal .chead {display: flex; gap: 10px; align-items: stretch;}
+#album-modal .cmap {flex: 0 0 48%; max-width: 48%;}
+#album-modal .mini {width: 100%; height: auto; display: block; background: #f8fafc; border: 1px solid var(--line); border-radius: 10px;}
+#album-modal .cinfo {flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.4; overflow-wrap: anywhere;}
+#album-modal .cinfo span {display: block; color: #334155;}
+#album-modal .cinfo .leg {color: #0f766e;}
+#album-modal .cinfo .stay {color: #c2410c;}
+#album-modal .ctitle {display: flex; align-items: center; gap: 6px; font-size: 16px; margin-bottom: 2px;}
+#album-modal .no {display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: #ea580c; color: #fff; font-weight: 700; font-size: 13px;}
+#album-modal .src {color: var(--muted); font-size: 12px; margin-top: 2px;}
+#album-modal .warn {color: #b45309; font-size: 12px;}
+#album-modal .memo {margin: 8px 0 4px; min-height: 24px; padding: 4px 8px; border-radius: 8px; font-size: 14px; background: #fffbeb; outline: none;}
+#album-modal .memo:empty::before {content: attr(data-ph); color: #a8a29e;}
+#album-modal .shots {display: block; margin-top: 8px;}
+#album-modal .shots .it {margin: 0 0 8px; break-inside: avoid;}
+#album-modal .shots img {width: 100%; height: auto; display: block; border-radius: 8px; background: #e2e8f0;}
+#album-modal .addmemo {margin: 6px 0 0; padding: 3px 10px; border: 1px dashed #cbd5e1; border-radius: 14px; background: #fff; color: #64748b; font: inherit; font-size: 12.5px; cursor: pointer;}
+#album-modal .noimg {padding: 24px 8px; text-align: center; background: #f1f5f9; border-radius: 8px;}
+#album-modal .foot {margin-top: 16px; color: var(--muted); font-size: 11.5px; text-align: center;}
+@media (max-width: 520px) {
+#album-modal .stats {grid-template-columns: repeat(2, 1fr);}
+#album-modal .two {grid-template-columns: 1fr;}
+}
+@media print {
+@page{size: A4; margin: 12mm;}
+#album-modal {background: #fff;}
+#album-modal .al-wrap {max-width: none; padding: 0;}
+#album-modal .noprint {display: none !important;}
+#album-modal .rp {border-radius: 0; padding: 0;}
+#album-modal .memo:empty {display: none;}
+#album-modal .memo {background: none; padding: 0;}
+}
+    </style>
+    <style id="albumAppPrintCss">
+@media print {
+  html.al-printing, body.al-printing { height: auto !important; overflow: visible !important; background: #fff !important; }
+  body.al-printing > *:not(#album-modal) { display: none !important; }
+  body.al-printing #album-modal { position: static !important; overflow: visible !important; }
+}
+    </style>
+    <div id="album-modal" class="hidden">
+      <div class="al-wrap">
+        <div class="card noprint" id="al-setup">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <h1>📸 이 경로로 앨범 만들기</h1>
+            <button type="button" class="btn" onclick="closeAlbum()">닫기</button>
+          </div>
+          <div class="muted sm" id="al-route-info"></div>
+          <div class="privacy">🔒 사진은 <b>이 기기의 브라우저 안에서만</b> 처리돼요. 서버(데이터베이스 포함)로 보내거나 저장하지 않아요. 만든 리포트는 PDF나 HTML 파일, 또는 이미지로 내 기기에 저장해요.<br>🗺 <b>배경 지도</b>를 켜면 지도 조각(타일)만 OpenStreetMap에서 받아요. 이때 지도 구역의 좌표는 전달되지만 사진 내용은 나가지 않아요.</div>
+          <label for="al-photos">사진 <span class="muted">(여러 장 선택)</span></label>
+          <input type="file" id="al-photos" accept="image/*" multiple>
+          <div class="muted sm" style="margin-top:4px">💡 안드로이드는 "사진 선택" 화면 대신 <b>파일(내 파일)</b>에서 고르면 위치 정보가 남는 경우가 많아요. 위치 정보가 없어도 이 경로의 기록과 시간으로 맞춰요.</div>
+          <div class="two">
+            <div><label for="al-tz">사진 시각 기준 시간대</label>
+              <select id="al-tz"><option value="540" selected>한국 (UTC+9)</option><option value="0">UTC</option><option value="480">중국·싱가포르 (UTC+8)</option><option value="420">태국·베트남 (UTC+7)</option><option value="-480">미국 서부 (UTC-8)</option><option value="60">유럽 중부 (UTC+1)</option></select></div>
+            <div><label for="al-shift">시계 보정 <span class="muted">(초, 사진이 기록보다 빠르면 +)</span></label>
+              <input type="number" id="al-shift" value="0" step="1"></div>
+          </div>
+          <label for="al-title">리포트 제목 <span class="muted">(비우면 경로 이름)</span></label>
+          <input type="text" id="al-title" maxlength="80" placeholder="예: 속리산 산행">
+          <label style="font-weight:500;margin-top:12px"><input type="checkbox" id="al-bg" checked> 배경 지도 넣기</label>
+          <div class="two">
+            <div><label for="al-bgkind">지도 종류</label><select id="al-bgkind"><option value="osm">일반 (OpenStreetMap)</option><option value="topo">지형·등고선 (OpenTopoMap)</option></select></div>
+            <div><label for="al-quality">리포트 안 사진 화질</label><select id="al-quality"><option value="low">작게 (파일 작음)</option><option value="mid" selected>보통</option><option value="high">크게 (파일 큼)</option></select></div>
+          </div>
+          <div class="muted sm" style="margin-top:4px">화질은 HTML·PDF 리포트에만 적용돼요. 블로그용 내보내기는 원본 사진을 그대로 써요(20MB 넘는 것만 줄임).</div>
+          <div class="bar"><button class="btn primary" id="al-make" type="button">리포트 만들기</button></div>
+          <div id="al-progress" aria-live="polite"></div>
+          <div class="err" id="al-err" hidden></div>
+        </div>
+        <div id="al-out"></div>
+      </div>
+    </div>
+
     <div id="toast" class="fixed bottom-10 left-1/2 bg-gray-800/95 text-white px-5 py-2.5 rounded-full shadow-2xl z-[9999] transition-all duration-300 toast-hide border border-gray-700 text-sm font-medium backdrop-blur-sm whitespace-nowrap"></div>
 
     <script>
@@ -965,6 +1077,21 @@
             }
             restCache.set(pts, out);
             return out;
+        }
+
+        // 전체 시간(tt)·휴식 제외 이동 시간(mt)·휴식 합계(rt) (모두 ms). 경로 상세 통계와 앨범이 같은 값을 쓴다.
+        function routeTimeStats(pts) {
+            const rests = getRests(pts);
+            let tt = 0, mt = 0, rt = 0;
+            for (const r of rests) rt += r.endMs - r.startMs;
+            if (pts.length > 0 && pts[0].time && pts[pts.length-1].time) tt = pts[pts.length-1].time - pts[0].time;
+            for (let i = 1; i < pts.length; i++) {
+                if (pts[i].time && pts[i-1].time) {
+                    const dsMs = pts[i].time - pts[i-1].time;
+                    if (dsMs > 0 && dsMs < 86400000) mt += dsMs - restOverlapMs(rests, pts[i-1].time, pts[i].time);
+                }
+            }
+            return { tt, mt, rt, rests };
         }
 
         // 시간 구간 [t0, t1]과 겹치는 휴식 시간(ms)
@@ -1819,17 +1946,8 @@
         function openDetailModal() {
             if (!currentRouteData) return;
             const pts = currentRouteData.points;
-            let tt = 0, mt = 0, rt = 0;
-            const rests = getRests(pts);
+            const { tt, mt, rt, rests } = routeTimeStats(pts);
             const restMinList = rests.map(r => Math.round(r.sec / 60)); // 3분 이상 휴식 각각의 시간(분), 시간 순서
-            for (const r of rests) rt += r.endMs - r.startMs;
-            if (pts.length > 0 && pts[0].time && pts[pts.length-1].time) tt = pts[pts.length-1].time - pts[0].time;
-            for (let i=1; i<pts.length; i++) {
-                if (pts[i].time && pts[i-1].time) {
-                    const dsMs = pts[i].time - pts[i-1].time;
-                    if (dsMs > 0 && dsMs < 86400000) mt += dsMs - restOverlapMs(rests, pts[i-1].time, pts[i].time);
-                }
-            }
             const dKm = currentRouteData.totalDist / 1000;
             const th = tt / 3600000, mh = mt / 3600000;
             const fmt = ms => ms > 0 ? `${Math.floor(ms/3600000)}시간 ${Math.floor((ms%3600000)/60000)}분` : '0분';
@@ -1871,6 +1989,8 @@
                 <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">하강</span><span class="text-red-400">-${currentRouteData.totalDescent.toFixed(0)} m</span></div>
                 <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">최고경사 1위</span><span class="text-yellow-400 font-bold">${formatGrad(steep1)}</span></div>
                 <div class="flex justify-between"><span class="text-gray-400">최고경사 2위</span><span class="text-yellow-400 font-bold">${formatGrad(steep2)}</span></div>
+
+                <button onclick="openAlbum()" class="w-full bg-sky-600 hover:bg-sky-500 text-white py-2 rounded-lg text-sm font-bold active:scale-95 transition">📸 이 경로로 앨범 만들기</button>
 
                 <div class="border-t border-gray-700 pt-3 space-y-2">
                     <div class="text-gray-300 font-bold">예상 소모 칼로리</div>
@@ -2044,6 +2164,751 @@
 
         if (isLoggedIn()) { startApp(); } else { showLoginModal(); }
 
+    
+
+        // ===== ALBUM BEGIN (TravelPlan 앨범 리포트를 이 경로용으로 옮긴 것) =====
+          const AlbumCore = (function () {
+          'use strict';
+          function haversineKm(a, b) {
+            const R = 6371, rad = Math.PI / 180;
+            const dLat = (b[0] - a[0]) * rad, dLon = (b[1] - a[1]) * rad;
+            const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * Math.sin(dLon / 2) ** 2;
+            return 2 * R * Math.asin(Math.sqrt(h));
+          }
+          // 파일 이름 속 촬영 시각: 20261122_141814 / 2026-11-22 14.18.14 등 → UTC ms (이름의 시각은 현지 시각이라 tzMin(분, 한국 540)을 뺀다)
+          function nameTime(name, tzMin) {
+            const m = /(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])[-_. T]?([01]\d|2[0-3])[-_.:]?([0-5]\d)[-_.:]?([0-5]\d)/.exec(String(name));
+            if (!m) return null;
+            return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) - (tzMin == null ? 540 : tzMin) * 60000;
+          }
+          // 기록에서 시각 t(ms)의 위치. 기록 안이면 앞뒤 점을 이어 계산, 밖이면 가장 가까운 끝점(maxGapSec 이내만).
+          // 반환: { lat, lon, ele, gapSec(기록 밖이면 끝점까지 초), inside, approx(앞뒤 점 간격이 2분 넘음) } 또는 null
+          function locateOnTrack(track, t, maxGapSec) {
+            if (!track || !track.length || !isFinite(t)) return null;
+            maxGapSec = maxGapSec == null ? 600 : maxGapSec;
+            const first = track[0], last = track[track.length - 1];
+            if (t < first.t || t > last.t) {
+              const e = t < first.t ? first : last, gap = Math.abs(t - e.t) / 1000;
+              return gap <= maxGapSec ? { lat: e.lat, lon: e.lon, ele: e.ele, gapSec: gap, inside: false, approx: true } : null;
+            }
+            let lo = 0, hi = track.length - 1;
+            while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (track[mid].t <= t) lo = mid; else hi = mid; }
+            const a = track[lo], b = track[hi], span = b.t - a.t;
+            const f = span > 0 ? (t - a.t) / span : 0;
+            return {
+              lat: a.lat + (b.lat - a.lat) * f, lon: a.lon + (b.lon - a.lon) * f,
+              ele: a.ele != null && b.ele != null ? a.ele + (b.ele - a.ele) * f : (a.ele != null ? a.ele : b.ele),
+              gapSec: 0, inside: true, approx: span > 120000
+            };
+          }
+          // 웹 메르카토르 세계 좌표(0~1, y는 아래로): 타일 지도와 정확히 겹치게 그리기 위해 사용
+          const mercX = (lon) => (lon + 180) / 360;
+          const mercY = (lat) => { const sn = Math.sin(Math.max(-85.0511, Math.min(85.0511, lat)) * Math.PI / 180); return 0.5 - Math.log((1 + sn) / (1 - sn)) / (4 * Math.PI); };
+          // 머문 곳 찾기: 한 점에서 radiusM 안에 minSec 이상 머물면 하나의 '머묾'. [{i0,i1,t0,t1,sec,lat,lon}]
+          function findStays(track, radiusM, minSec) {
+            radiusM = radiusM || 60; minSec = minSec || 300;
+            const out = [], n = track ? track.length : 0;
+            let i = 0;
+            while (i < n - 1) {
+              let j = i + 1;
+              while (j < n && haversineKm([track[i].lat, track[i].lon], [track[j].lat, track[j].lon]) * 1000 <= radiusM) j++;
+              const e = j - 1;
+              if (e > i && track[e].t - track[i].t >= minSec * 1000) {
+                let la = 0, lo = 0;
+                for (let k = i; k <= e; k++) { la += track[k].lat; lo += track[k].lon; }
+                out.push({ i0: i, i1: e, t0: track[i].t, t1: track[e].t, sec: (track[e].t - track[i].t) / 1000, lat: la / (e - i + 1), lon: lo / (e - i + 1) });
+                i = j;
+              } else i++;
+            }
+            // 바로 이어지는 머묾(조금씩 움직이며 쉰 경우)은 하나로 합친다
+            const merged = [];
+            out.forEach((st) => {
+              const prev = merged[merged.length - 1];
+              if (prev && st.t0 - prev.t1 <= 120000 && haversineKm([prev.lat, prev.lon], [st.lat, st.lon]) * 1000 <= 150) {
+                const w1 = prev.i1 - prev.i0 + 1, w2 = st.i1 - st.i0 + 1;
+                prev.lat = (prev.lat * w1 + st.lat * w2) / (w1 + w2); prev.lon = (prev.lon * w1 + st.lon * w2) / (w1 + w2);
+                prev.i1 = st.i1; prev.t1 = st.t1; prev.sec = (prev.t1 - prev.t0) / 1000;
+              } else merged.push(st);
+            });
+            return merged;
+          }
+          return { haversineKm, nameTime, locateOnTrack, mercX, mercY, findStays };
+          })();
+          /* JPEG EXIF 읽기(외부 라이브러리 없음): 촬영 시각 · GPS · 방향. 파일은 브라우저 안에서만 읽는다. */
+          const AlbumExif = (function () {
+            'use strict';
+            const TYPE_SIZE = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 9: 4, 10: 8 };
+
+            function readValue(dv, tiff, entry, le) {
+              const size = (TYPE_SIZE[entry.type] || 1) * entry.count;
+              let off = size > 4 ? tiff + dv.getUint32(entry.pos + 8, le) : entry.pos + 8;
+              if (off < 0 || off + size > dv.byteLength) return null;
+              const out = [];
+              for (let i = 0; i < entry.count; i++) {
+                switch (entry.type) {
+                  case 3: out.push(dv.getUint16(off, le)); off += 2; break;
+                  case 4: out.push(dv.getUint32(off, le)); off += 4; break;
+                  case 5: { const n = dv.getUint32(off, le), d = dv.getUint32(off + 4, le); out.push(d ? n / d : 0); off += 8; break; }
+                  case 2: case 1: case 7: out.push(dv.getUint8(off)); off += 1; break;
+                  default: return null;
+                }
+              }
+              if (entry.type === 2) {
+                let s = '';
+                for (const c of out) { if (c === 0) break; s += String.fromCharCode(c); }
+                return s;
+              }
+              return out;
+            }
+
+            function readIfd(dv, tiff, ifdOff, le) {
+              const res = {};
+              const base = tiff + ifdOff;
+              if (base < 0 || base + 2 > dv.byteLength) return res;
+              const n = dv.getUint16(base, le);
+              for (let i = 0; i < n && i < 200; i++) {
+                const pos = base + 2 + i * 12;
+                if (pos + 12 > dv.byteLength) break;
+                const entry = { tag: dv.getUint16(pos, le), type: dv.getUint16(pos + 2, le), count: dv.getUint32(pos + 4, le), pos };
+                if (entry.count > 64 && entry.type !== 2 && entry.type !== 7) continue;
+                res[entry.tag] = readValue(dv, tiff, entry, le);
+              }
+              return res;
+            }
+
+            const dms = (v, ref) => {
+              if (!v || v.length < 3) return null;
+              const x = v[0] + v[1] / 60 + v[2] / 3600;
+              return /^[SW]/i.test(ref || '') ? -x : x;
+            };
+
+            // buf: ArrayBuffer(파일 앞부분이면 충분). 반환: { local:'2026:11:22 14:18:14'|null, offset:'+09:00'|null, gpsUtcMs, lat, lon, alt, orientation } | null
+            function parse(buf) {
+              const dv = new DataView(buf);
+              if (dv.byteLength < 12 || dv.getUint16(0) !== 0xFFD8) return null;
+              let off = 2;
+              while (off + 4 < dv.byteLength) {
+                const marker = dv.getUint16(off);
+                if (marker === 0xFFDA || (marker & 0xFF00) !== 0xFF00) return null;
+                const len = dv.getUint16(off + 2);
+                if (marker === 0xFFE1 && off + 10 < dv.byteLength &&
+                    dv.getUint32(off + 4) === 0x45786966) { // "Exif"
+                  const tiff = off + 10;
+                  const le = dv.getUint16(tiff) === 0x4949;
+                  const ifd0 = readIfd(dv, tiff, dv.getUint32(tiff + 4, le), le);
+                  const exif = ifd0[0x8769] ? readIfd(dv, tiff, ifd0[0x8769][0], le) : {};
+                  const gps = ifd0[0x8825] ? readIfd(dv, tiff, ifd0[0x8825][0], le) : {};
+                  const r = { local: exif[0x9003] || exif[0x9004] || ifd0[0x0132] || null, offset: exif[0x9011] || null,
+                    gpsUtcMs: null, lat: null, lon: null, alt: null, orientation: ifd0[0x0112] ? ifd0[0x0112][0] : 1 };
+                  const la = dms(gps[2], gps[1]), lo = dms(gps[4], gps[3]);
+                  if (la != null && lo != null && isFinite(la) && isFinite(lo) && !(la === 0 && lo === 0) && Math.abs(la) <= 90 && Math.abs(lo) <= 180) { r.lat = la; r.lon = lo; }
+                  if (gps[6] && gps[6].length) r.alt = (gps[5] && gps[5][0] === 1 ? -1 : 1) * gps[6][0];
+                  if (gps[29] && gps[7] && gps[7].length >= 3) {
+                    const dm = /^(\d{4}):(\d{2}):(\d{2})/.exec(gps[29]);
+                    if (dm) r.gpsUtcMs = Date.UTC(+dm[1], +dm[2] - 1, +dm[3]) + (gps[7][0] * 3600 + gps[7][1] * 60 + gps[7][2]) * 1000;
+                  }
+                  return r;
+                }
+                off += 2 + len;
+              }
+              return null;
+            }
+
+            // "2026:11:22 14:18:14" + 시간대(분, 동쪽이 +) → UTC ms
+            function localToUtc(local, tzMin) {
+              const m = /^(\d{4})[:\-](\d{2})[:\-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(local || '');
+              if (!m) return null;
+              return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) - tzMin * 60000;
+            }
+            const offsetMin = (s) => { const m = /^([+-])(\d{2}):?(\d{2})$/.exec(s || ''); return m ? (m[1] === '-' ? -1 : 1) * (+m[2] * 60 + +m[3]) : null; };
+
+            /* 사진 한 장의 정보를 정리한다.
+               시각 우선순위: EXIF 촬영시각+시간대오프셋 → GPS 시각(UTC) → EXIF 촬영시각(기본 시간대) → 파일 이름 → 파일 수정 시각 */
+            function describe(exif, fileName, lastModified, tzMin) {
+              const out = { t: null, timeFrom: null, lat: null, lon: null, alt: null, orientation: 1 };
+              if (exif) {
+                out.orientation = exif.orientation || 1;
+                const om = offsetMin(exif.offset);
+                if (exif.local && om != null) { out.t = localToUtc(exif.local, om); out.timeFrom = 'EXIF'; }
+                else if (exif.gpsUtcMs != null) { out.t = exif.gpsUtcMs; out.timeFrom = 'EXIF(GPS시각)'; }
+                else if (exif.local) { out.t = localToUtc(exif.local, tzMin); out.timeFrom = 'EXIF'; }
+                if (exif.lat != null) { out.lat = exif.lat; out.lon = exif.lon; out.alt = exif.alt; }
+              }
+              if (out.t == null) {
+                const nt = AlbumCore.nameTime(fileName, tzMin);
+                if (nt != null) { out.t = nt; out.timeFrom = '파일 이름'; }
+              }
+              if (out.t == null && lastModified) { out.t = lastModified; out.timeFrom = '파일 수정 시각'; }
+              return out;
+            }
+
+            return { parse, describe, localToUtc };
+          })();
+
+        /* 여행 앨범 리포트: GPX 기록 + 사진(EXIF 시각·GPS)을 이 기기 안에서만 맞춰 리포트를 만든다. 네트워크 전송 없음. */
+        (function () {
+          'use strict';
+          const C = AlbumCore, X = AlbumExif;
+          const $ = (id) => document.getElementById(id);
+          const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+          const WD = ['일', '월', '화', '수', '목', '금', '토'];
+          let tzMin = 540;
+          let photoFiles = {};   // pid -> File (블로그용 내보내기에서 원본을 그대로 쓰기 위해 보관)
+          let albumRoute = null; // 앨범을 만드는 경로(열려 있던 경로)
+          const QUALITY = { low: { side: 640, q: 0.7 }, mid: { side: 1000, q: 0.8 }, high: { side: 1600, q: 0.85 } };
+
+          // 현지 시각 문자열 (UTC ms → 기준 시간대의 날짜/시각)
+          function parts(ms) { const d = new Date(ms + tzMin * 60000); return { y: d.getUTCFullYear(), mo: d.getUTCMonth() + 1, d: d.getUTCDate(), h: d.getUTCHours(), mi: d.getUTCMinutes(), wd: d.getUTCDay() }; }
+          const p2 = (n) => String(n).padStart(2, '0');
+          const dayKey = (ms) => { const p = parts(ms); return p.y + '-' + p2(p.mo) + '-' + p2(p.d); };
+          const dayLabel = (ms) => { const p = parts(ms); return p.y + '년 ' + p.mo + '월 ' + p.d + '일(' + WD[p.wd] + ')'; };
+          const hm = (ms) => { const p = parts(ms); return p2(p.h) + ':' + p2(p.mi); };
+          const dur = (sec) => { const m = Math.floor(sec / 60); return Math.floor(m / 60) + '시간 ' + p2(m % 60) + '분'; }; // 경로 상세 통계와 같게 분은 버림
+
+          async function readExif(file) {
+            try { return X.parse(await file.slice(0, 262144).arrayBuffer()); } catch (e) { return null; }
+          }
+          // 긴 변 maxSide px 썸네일(방향 적용, EXIF 제거된 새 JPEG)
+          async function thumb(file, maxSide, q) {
+            try {
+              const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+              const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+              const cv = document.createElement('canvas');
+              cv.width = Math.max(1, Math.round(bmp.width * k)); cv.height = Math.max(1, Math.round(bmp.height * k));
+              cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+              if (bmp.close) bmp.close();
+              return { url: cv.toDataURL('image/jpeg', q), w: cv.width, h: cv.height };
+            } catch (e) { return null; }
+          }
+
+          // 사진마다 시각·위치를 정리하고 기록과 맞춘다
+          function place(photo, track, shiftSec) {
+            const out = { how: 'none', lat: null, lon: null, ele: null, gapSec: 0, approx: false };
+            const t = photo.t == null ? null : photo.t + shiftSec * 1000;
+            photo.tAdj = t;
+            if (photo.lat != null) { out.how = 'photo'; out.lat = photo.lat; out.lon = photo.lon; out.ele = photo.alt; }
+            if (track && t != null) {
+              const g = C.locateOnTrack(track, t, 600);
+              if (g) {
+                out.track = g;
+                if (out.how === 'none') { out.how = g.inside ? 'track' : 'edge'; out.lat = g.lat; out.lon = g.lon; out.ele = g.ele; out.gapSec = g.gapSec; out.approx = g.approx; }
+                else if (out.ele == null) out.ele = g.ele;
+              }
+            }
+            photo.loc = out;
+          }
+
+          // ---- 장면(챕터) 묶기: 첫 사진에서 200m 넘게 떨어지면 새 장면(위치 모르는 사진만 5분 간격) ----
+          function chaptersOf(photos, track, stays) {
+            const list = [];
+            let cur = null;
+            photos.forEach((p) => {
+              const hasT = p.tAdj != null;
+              const here = p.loc.how !== 'none' ? p.loc : null;
+              const lastP = cur && cur.photos[cur.photos.length - 1];
+              let split = !cur || !hasT || cur.noTime;
+              if (!split && lastP) {
+                // 위치를 아는 사진은 거리로만 나눈다: 장면의 첫 사진에서 200m 넘으면 새 장면(시간이 길어도 같은 자리면 같은 장면).
+                // 위치를 모르는 사진만 시간으로 나눈다: 앞 사진과 5분 넘게 벌어지면 새 장면.
+                if (here && cur.loc) { if (C.haversineKm([cur.loc.lat, cur.loc.lon], [here.lat, here.lon]) > 0.2) split = true; }
+                else if (p.tAdj - lastP.tAdj > 5 * 60000) split = true;
+              }
+              if (hasT && cur && cur.noTime) split = true;
+              if (split) { cur = { photos: [], loc: null, noTime: !hasT }; list.push(cur); }
+              cur.photos.push(p);
+              if (here && !cur.loc) cur.loc = here;
+            });
+            list.forEach((c, i) => {
+              c.n = i + 1;
+              const ts = c.photos.map((p) => p.tAdj).filter((x) => x != null);
+              c.t0 = ts.length ? Math.min(...ts) : null; c.t1 = ts.length ? Math.max(...ts) : null;
+              const ele = c.photos.map((p) => p.loc.ele).filter((x) => x != null);
+              c.ele = ele.length ? ele.reduce((x, y) => x + y, 0) / ele.length : null;
+              c.idx = null;
+              if (track && c.loc) {
+                if (c.t0 != null && c.photos.some((p) => p.loc.track)) {
+                  let lo = 0, hi = track.length - 1; const tm = (c.t0 + c.t1) / 2;
+                  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (track[m].t <= tm) lo = m; else hi = m; }
+                  c.idx = Math.abs(track[lo].t - tm) <= Math.abs(track[hi].t - tm) ? lo : hi;
+                } else { // 시각을 못 맞춘 사진은 위치가 가장 가까운 기록 점에 놓는다
+                  let best = 0, bd = Infinity;
+                  for (let k = 0; k < track.length; k += 3) { const d = (track[k].lat - c.loc.lat) ** 2 + (track[k].lon - c.loc.lon) ** 2; if (d < bd) { bd = d; best = k; } }
+                  c.idx = best;
+                }
+              }
+              // 머문 곳(식당 등): 이 장면의 위치·시각이 머묾 구간 안(앞뒤 5분 여유)이면 연결
+              c.stay = null;
+              (stays || []).forEach((st) => {
+                const inIdx = c.idx != null && c.idx >= st.i0 && c.idx <= st.i1;
+                const inTime = c.t0 != null && c.t1 >= st.t0 - 300000 && c.t0 <= st.t1 + 300000 && c.loc && C.haversineKm([c.loc.lat, c.loc.lon], [st.lat, st.lon]) * 1000 <= 150;
+                if (!c.stay && (inIdx || inTime)) c.stay = st;
+              });
+            });
+            return list;
+          }
+
+          // ---- SVG ----
+          function makeProj(pts, W, minH, maxH) {
+            const xs = pts.map((p) => C.mercX(p[1])), ys = pts.map((p) => C.mercY(p[0]));
+            const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+            const pad = 24, spanX = Math.max(maxX - minX, 3e-5), spanY = Math.max(maxY - minY, 3e-5); // 최소 약 600m
+            const H = Math.round(Math.min(maxH, Math.max(minH, (W - 2 * pad) * spanY / spanX + 2 * pad)));
+            const sc = Math.min((W - 2 * pad) / spanX, (H - 2 * pad) / spanY);
+            const ox = (W - spanX * sc) / 2, oy = (H - spanY * sc) / 2;
+            const fx = (wx) => (wx - minX) * sc + ox, fy = (wy) => (wy - minY) * sc + oy;
+            return {
+              W, H, sc, fx, fy,
+              X: (lon) => fx(C.mercX(lon)).toFixed(1), Y: (lat) => fy(C.mercY(lat)).toFixed(1),
+              wx0: minX - ox / sc, wx1: minX + (W - ox) / sc, wy0: minY - oy / sc, wy1: minY + (H - oy) / sc
+            };
+          }
+          const line = (track, pr, a, b, maxPts) => {
+            const step = Math.max(1, Math.floor((b - a + 1) / maxPts));
+            let o = '';
+            for (let i = a; i <= b; i += step) o += pr.X(track[i].lon) + ',' + pr.Y(track[i].lat) + ' ';
+            return o + pr.X(track[b].lon) + ',' + pr.Y(track[b].lat);
+          };
+          const badge = (x, y, r, n, fill) => '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + (fill || '#ea580c') + '" stroke="#fff" stroke-width="2"/>' +
+            '<text x="' + x + '" y="' + (+y + r * 0.38).toFixed(1) + '" font-size="' + (r * 1.05).toFixed(1) + '" font-weight="700" fill="#fff" text-anchor="middle">' + n + '</text>';
+
+          function makePr(track, photos) {
+            const pts = [];
+            if (track) track.forEach((p) => pts.push([p.lat, p.lon]));
+            photos.forEach((p) => { if (p.loc.how !== 'none') pts.push([p.loc.lat, p.loc.lon]); });
+            return pts.length ? makeProj(pts, 640, 240, 560) : null;
+          }
+
+          // ---- 배경 지도: 타일을 이어 붙여 한 장의 그림으로 (저장한 PDF/HTML에도 그대로 들어가게) ----
+          const TILES = {
+            osm: { hosts: ['https://tile.openstreetmap.org', 'https://tile.openstreetmap.de'], url: (h, z, x, y) => h + '/' + z + '/' + x + '/' + y + '.png', maxZ: 17, credit: '© OpenStreetMap contributors' },
+            topo: { hosts: ['https://a.tile.opentopomap.org', 'https://b.tile.opentopomap.org', 'https://c.tile.opentopomap.org'], url: (h, z, x, y) => h + '/' + z + '/' + x + '/' + y + '.png', maxZ: 17, credit: '© OpenStreetMap contributors, SRTM | © OpenTopoMap (CC-BY-SA)' }
+          };
+          function loadTile(kind, z, x, y) {
+            const T = TILES[kind];
+            const tryHost = (i) => new Promise((resolve) => {
+              if (i >= T.hosts.length) return resolve(null);
+              const img = new Image(); img.crossOrigin = 'anonymous';
+              const timer = setTimeout(() => { img.src = ''; resolve(tryHost(i + 1)); }, 9000);
+              img.onload = () => { clearTimeout(timer); resolve(img); };
+              img.onerror = () => { clearTimeout(timer); resolve(tryHost(i + 1)); };
+              img.src = T.url(T.hosts[i], z, x, y);
+            });
+            return tryHost(0);
+          }
+          // 지도 글자가 읽히려면 타일 1칸이 화면에서 대략 200~300px 이어야 한다(타일 원본은 256px).
+          // 화면 폭 ≈ 345px 에 viewBox 640 을 그리므로 타일 1칸 ≈ 430 viewBox 단위가 되는 확대 수준(z)을 고른다. detail: -1 넓게, 0 보통, +1 자세히
+          async function basemap(pr, kind, detail) {
+            const T = TILES[kind], f = 1.5, cv = document.createElement('canvas');
+            cv.width = Math.round(pr.W * f); cv.height = Math.round(pr.H * f);
+            const g = cv.getContext('2d'); g.fillStyle = '#eef2f1'; g.fillRect(0, 0, cv.width, cv.height);
+            let z = Math.max(6, Math.min(T.maxZ, Math.round(Math.log2(pr.sc / 430)) + (detail || 0)));
+            const range = (zz) => { const n = 2 ** zz; return { n, x0: Math.max(0, Math.floor(pr.wx0 * n)), x1: Math.min(n - 1, Math.floor(pr.wx1 * n)), y0: Math.max(0, Math.floor(pr.wy0 * n)), y1: Math.min(n - 1, Math.floor(pr.wy1 * n)) }; };
+            let r = range(z);
+            while ((r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1) > 40 && z > 6) { z--; r = range(z); }
+            const jobs = [];
+            for (let x = r.x0; x <= r.x1; x++) for (let y = r.y0; y <= r.y1; y++) jobs.push({ x, y });
+            let ok = 0;
+            await Promise.all(jobs.map(async (t) => {
+              const img = await loadTile(kind, z, t.x, t.y);
+              if (!img) return;
+              ok++;
+              const x0 = pr.fx(t.x / r.n) * f, y0 = pr.fy(t.y / r.n) * f, x1 = pr.fx((t.x + 1) / r.n) * f, y1 = pr.fy((t.y + 1) / r.n) * f;
+              g.drawImage(img, x0, y0, x1 - x0 + 0.6, y1 - y0 + 0.6);
+            }));
+            if (!ok) return null;
+            return { url: cv.toDataURL('image/jpeg', 0.88), credit: T.credit, z }; // 타일 서버가 허용하지 않으면 여기서 예외
+          }
+          const bgUse = (pr) => '<use href="#al-bgmap" x="0" y="0"/>';
+
+          const stayRing = (pr, c, r) => c.stay ? '<circle cx="' + pr.X(c.loc.lon) + '" cy="' + pr.Y(c.loc.lat) + '" r="' + r + '" fill="#ea580c" fill-opacity=".14" stroke="#ea580c" stroke-width="2" stroke-dasharray="5 4"/>' : '';
+          // 전체 지도: 배경 지도 + 걸은 길 + 장면 번호(머문 곳은 점선 원)
+          function mapSVG(track, chapters, pr, hasBg, credit) {
+            if (!pr) return '';
+            let h = '<svg class="map" viewBox="0 0 ' + pr.W + ' ' + pr.H + '" role="img" aria-label="걸은 길과 장면 위치(북쪽이 위)">' + (hasBg ? bgUse(pr) : '');
+            if (track) {
+              const l = line(track, pr, 0, track.length - 1, 900);
+              h += '<polyline points="' + l + '" fill="none" stroke="#fff" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>' +
+                '<polyline points="' + l + '" fill="none" stroke="#0f766e" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>';
+              const f = track[0], e = track[track.length - 1];
+              h += '<circle cx="' + pr.X(f.lon) + '" cy="' + pr.Y(f.lat) + '" r="7" fill="#16a34a" stroke="#fff" stroke-width="2.5"/>' +
+                '<circle cx="' + pr.X(e.lon) + '" cy="' + pr.Y(e.lat) + '" r="7" fill="#dc2626" stroke="#fff" stroke-width="2.5"/>';
+            }
+            chapters.forEach((c) => { if (c.loc) h += stayRing(pr, c, 19) + badge(pr.X(c.loc.lon), pr.Y(c.loc.lat), 11, c.n); });
+            if (hasBg) h += '<text x="' + (pr.W - 6) + '" y="' + (pr.H - 6) + '" font-size="10" text-anchor="end" fill="#334155" stroke="#fff" stroke-width="3" paint-order="stroke">' + esc(credit || '© OpenStreetMap contributors') + '</text>';
+            return h + '</svg>';
+          }
+          // 장면별 작은 지도: 전체 지도를 이 장면 주변으로 잘라서 보여 준다. 지금까지 걸은 길은 진하게, 앞으로 갈 길은 연하게.
+          function miniSVG(track, chapters, c, pr, hasBg) {
+            if (!pr || !c.loc) return '';
+            const cw = pr.W * 0.8, ch = pr.H * 0.8;
+            let x = +pr.X(c.loc.lon) - cw / 2, y = +pr.Y(c.loc.lat) - ch / 2;
+            x = Math.max(0, Math.min(pr.W - cw, x)); y = Math.max(0, Math.min(pr.H - ch, y));
+            let h = '<svg class="mini" viewBox="' + x.toFixed(1) + ' ' + y.toFixed(1) + ' ' + cw.toFixed(1) + ' ' + ch.toFixed(1) + '" role="img" aria-label="장면 ' + c.n + ' 위치">' + (hasBg ? bgUse(pr) : '<rect x="0" y="0" width="' + pr.W + '" height="' + pr.H + '" fill="#f8fafc"/>');
+            if (track) {
+              h += '<polyline points="' + line(track, pr, 0, track.length - 1, 500) + '" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round" stroke-linecap="round" opacity=".85"/>' +
+                '<polyline points="' + line(track, pr, 0, track.length - 1, 500) + '" fill="none" stroke="#94a3b8" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>';
+              if (c.idx != null && c.idx > 0) h += '<polyline points="' + line(track, pr, 0, c.idx, 500) + '" fill="none" stroke="#0f766e" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>';
+              h += '<circle cx="' + pr.X(track[0].lon) + '" cy="' + pr.Y(track[0].lat) + '" r="7" fill="#16a34a" stroke="#fff" stroke-width="2.5"/>';
+            } else {
+              chapters.forEach((o) => { if (o.loc && o !== c) h += '<circle cx="' + pr.X(o.loc.lon) + '" cy="' + pr.Y(o.loc.lat) + '" r="5" fill="#94a3b8" stroke="#fff" stroke-width="2"/>'; });
+            }
+            return h + (c.stay ? stayRing(pr, c, 24) : '<circle cx="' + pr.X(c.loc.lon) + '" cy="' + pr.Y(c.loc.lat) + '" r="19" fill="#ea580c" fill-opacity=".2"/>') + badge(pr.X(c.loc.lon), pr.Y(c.loc.lat), 13, c.n) + '</svg>';
+          }
+          function elevSVG(track, chapters, cum) {
+            const hasEle = track && track.filter((p) => p.ele != null).length > track.length * 0.8;
+            if (!hasEle) return '';
+            const total = cum[cum.length - 1] || 1;
+            const es = track.map((p) => (p.ele == null ? 0 : p.ele));
+            const mn = Math.min(...es.filter((v, i) => track[i].ele != null)), mx = Math.max(...es);
+            const W = 640, H = 190, L = 40, R = 10, T = 14, B = 24;
+            const span = Math.max(mx - mn, 10), lo = mn - span * 0.06, hi = mx + span * 0.12;
+            const Xp = (d) => L + (d / total) * (W - L - R), Yp = (e) => T + (1 - (e - lo) / (hi - lo)) * (H - T - B);
+            const step = Math.max(1, Math.floor(track.length / 400));
+            let ln = '';
+            for (let i = 0; i < track.length; i += step) ln += Xp(cum[i]).toFixed(1) + ',' + Yp(es[i]).toFixed(1) + ' ';
+            ln += Xp(total).toFixed(1) + ',' + Yp(es[es.length - 1]).toFixed(1);
+            let h = '<svg class="elev" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="고도 프로필과 장면 위치">' +
+              '<polygon points="' + ln + ' ' + Xp(total).toFixed(1) + ',' + (H - B) + ' ' + L + ',' + (H - B) + '" fill="#0f766e" fill-opacity=".16"/>' +
+              '<polyline points="' + ln + '" fill="none" stroke="#0f766e" stroke-width="2" stroke-linejoin="round"/>' +
+              '<text x="' + (L - 4) + '" y="' + (Yp(mx) + 3).toFixed(1) + '" font-size="10" text-anchor="end" fill="#64748b">' + Math.round(mx) + 'm</text>' +
+              '<text x="' + (L - 4) + '" y="' + (Yp(mn) + 3).toFixed(1) + '" font-size="10" text-anchor="end" fill="#64748b">' + Math.round(mn) + 'm</text>';
+            const kmStep = total > 12 ? 4 : total > 5 ? 2 : 1;
+            for (let k = 0; k <= total + 0.01; k += kmStep) h += '<text x="' + Xp(k).toFixed(1) + '" y="' + (H - 6) + '" font-size="10" text-anchor="middle" fill="#64748b">' + k + 'km</text>';
+            chapters.forEach((c) => {
+              if (c.idx == null) return;
+              const x = Xp(cum[c.idx]).toFixed(1), y = Yp(es[c.idx]).toFixed(1);
+              h += '<line x1="' + x + '" y1="' + y + '" x2="' + x + '" y2="' + (H - B) + '" stroke="#ea580c" stroke-opacity=".35"/>' + badge(x, y, 9, c.n);
+            });
+            return h + '</svg>';
+          }
+
+          const HOW = { photo: '📍 사진 GPS', track: '🧭 GPX 시간 맞춤', edge: '🧭 GPX 끝 지점', none: '❔ 위치 없음' };
+          const fmtKm = (k) => (k < 0.1 ? Math.round(k * 1000) + 'm' : k.toFixed(1) + 'km');
+          const durShort = (sec) => { const m = Math.max(1, Math.round(sec / 60)); return m >= 60 ? Math.floor(m / 60) + '시간 ' + (m % 60 ? m % 60 + '분' : '') : m + '분'; };
+
+          function chapterHTML(c, prev, track, cum, chapters, pr, hasBg) {
+            let when = c.t0 == null ? '시각 모름' : (c.t1 !== c.t0 && hm(c.t1) !== hm(c.t0) ? hm(c.t0) + ' ~ ' + hm(c.t1) : hm(c.t0));
+            if (c.stay) when = hm(c.stay.t0) + ' ~ ' + hm(c.stay.t1);
+            let meta = '';
+
+            if (c.ele != null) meta += '<span>⛰ 고도 ' + Math.round(c.ele) + 'm</span>';
+            if (track && c.idx != null) {
+              meta += '<span>🚶 출발 후 ' + fmtKm(cum[c.idx]) + ' · ' + durShort((track[c.idx].t - track[0].t) / 1000) + '</span>';
+            }
+            const warns = [];
+            c.photos.forEach((p) => {
+              if (p.loc.how === 'edge') warns.push('기록 ' + (p.tAdj < p._trackStart ? '시작 ' + Math.round(p.loc.gapSec / 60) + '분 전' : '종료 ' + Math.round(p.loc.gapSec / 60) + '분 뒤') + '에 찍어 끝 지점으로 표시');
+              else if (p.loc.how === 'track' && p.loc.approx) warns.push('기록 간격이 길어 대략적인 위치');
+              else if (p.loc.how === 'none' && p.tAdj != null) warns.push('기록 시간 밖이라 위치를 알 수 없어요');
+            });
+            const uniq = warns.filter((w, i) => warns.indexOf(w) === i);
+            const imgs = c.photos.map((p) => '<div class="it" style="--a:' + (p.thumb ? (p.thumb.w / p.thumb.h).toFixed(3) : '1.333') + '">' +
+              (p.thumb ? '<img data-pid="' + p.pid + '" alt="장면 ' + c.n + ' 사진" src="' + p.thumb.url + '">' : '<div class="noimg muted">미리보기 없음<br>' + esc(p.name) + '</div>') + '</div>').join('');
+            return '<section class="chap"><div class="chead">' + (c.loc ? '<div class="cmap">' + miniSVG(track, chapters, c, pr, hasBg) + '</div>' : '') +
+              '<div class="cinfo"><div class="ctitle"><span class="no">' + c.n + '</span><b>' + esc(when) + '</b></div>' + meta +
+              uniq.map((w) => '<div class="warn">' + esc(w) + '</div>').join('') + '</div></div>' +
+              '<button type="button" class="addmemo noprint">✎ 메모 추가</button><div class="memo" contenteditable="true" data-ph="이 장면에 한 줄 메모…" spellcheck="false" hidden></div>' +
+              '<div class="shots ' + (c.photos.length === 1 ? 'n1' : 'nm') + '">' + imgs + '</div></section>';
+          }
+
+          function buildReport(title, track, photos, pr, bgUrl, bgCredit, statsIn) {
+            const stats = statsIn || null; // 통계는 GPX Tracker 경로 상세 통계와 같은 값을 받아서 쓴다
+            photos.forEach((p) => { p._trackStart = track ? track[0].t : 0; });
+            const stays = track ? C.findStays(track, 60, 300) : [];
+            const chapters = chaptersOf(photos, track, stays);
+            const cum = [0];
+            if (track) for (let i = 1; i < track.length; i++) cum.push(cum[i - 1] + C.haversineKm([track[i - 1].lat, track[i - 1].lon], [track[i].lat, track[i].lon]));
+            const first = stats ? stats.start : (photos.find((p) => p.tAdj != null) || {}).tAdj;
+            const last = stats ? stats.end : null;
+            let h = '<article class="rp" id="al-rp">' + (bgUrl ? '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><image id="al-bgmap" href="' + bgUrl + '" x="0" y="0" width="' + pr.W + '" height="' + pr.H + '"/></defs></svg>' : '') + '<h1>' + esc(title) + '</h1><div class="rp-sub">' +
+              (first != null ? esc(dayLabel(first)) : '') + (stats ? ' · ' + hm(stats.start) + ' ~ ' + hm(last) : '') + ' · 사진 ' + photos.length + '장 · 장면 ' + chapters.length + '곳</div>';
+            if (stats) {
+              h += '<section class="rp-sec"><div class="stats">' +
+                '<div><small>거리</small><b>' + stats.km.toFixed(1) + 'km</b></div>' +
+                '<div><small>총 시간 / 이동</small><b>' + dur(stats.totalSec) + '</b><small>이동 ' + dur(stats.movingSec) + '</small></div>' +
+                '<div><small>누적 오르막</small><b>' + Math.round(stats.up) + 'm</b><small>내리막 ' + Math.round(stats.down) + 'm</small></div>' +
+                '<div><small>고도</small><b>' + (stats.max != null ? Math.round(stats.max) + 'm' : '–') + '</b><small>최저 ' + (stats.min != null ? Math.round(stats.min) + 'm' : '–') + '</small></div></div></section>';
+            }
+            const m = mapSVG(track, chapters, pr, !!bgUrl, bgCredit);
+            if (m) h += '<section class="rp-sec">' + m + '<div class="muted sm">초록 시작 · 빨강 끝 · 주황 번호는 아래 이야기의 장면 번호 · 점선 원은 머문 곳</div></section>';
+            const e = elevSVG(track, chapters, cum);
+            if (e) h += '<section class="rp-sec">' + e + '</section>';
+            h += '<section class="rp-sec story"><h2>이야기</h2>';
+            let prev = null;
+            chapters.forEach((c) => { h += chapterHTML(c, prev, track, cum, chapters, pr, !!bgUrl); if (c.idx != null) prev = c; });
+            h += '</section><div class="foot">이 리포트는 이 기기에서만 만들어졌고 서버에 저장되지 않았어요 · 만든 날 ' + esc(new Date().toISOString().slice(0, 10)) + '</div></article>';
+            return h;
+          }
+
+          // ---- GPX Tracker 경로 → 앨범용 기록/통계 ----
+          const routeTitle = (r) => String((r && r.name) || '앨범').replace(/\.gpx$/i, '');
+          // 시간이 있는 점만 [{lat, lon, ele, t(ms)}]. 고도가 전부 0이면(고도 없는 GPX) 고도 없음으로 본다.
+          function routeToTrack(route) {
+            const pts = route.points || [];
+            const noEle = pts.every((p) => !p.ele);
+            const out = [];
+            for (const p of pts) if (p.time) out.push({ lat: p.lat, lon: p.lon, ele: noEle ? null : p.ele, t: p.time });
+            out.sort((x, y) => x.t - y.t);
+            return out.length >= 2 ? out : null;
+          }
+          // 경로 상세 통계와 같은 값: 거리·상승/하강은 경로 값, 전체/이동 시간은 routeTimeStats(휴식 제외)
+          function albumStats(route, track) {
+            const ts = routeTimeStats(route.points);
+            let min = Infinity, max = -Infinity;
+            track.forEach((p) => { if (p.ele != null) { if (p.ele < min) min = p.ele; if (p.ele > max) max = p.ele; } });
+            return {
+              km: route.totalDist / 1000, start: track[0].t, end: track[track.length - 1].t,
+              totalSec: ts.tt / 1000, movingSec: ts.mt / 1000, up: route.totalAscent, down: route.totalDescent,
+              min: min === Infinity ? null : min, max: max === -Infinity ? null : max
+            };
+          }
+
+          async function make() {
+            const err = $('al-err'), prog = $('al-progress'), btn = $('al-make');
+            err.hidden = true;
+            const route = albumRoute;
+            if (!route) return;
+            const files = Array.from($('al-photos').files || []);
+            if (!files.length) { err.textContent = '사진을 한 장 이상 골라 주세요.'; err.hidden = false; return; }
+            tzMin = parseInt($('al-tz').value, 10) || 0;
+            const shiftSec = parseFloat($('al-shift').value) || 0;
+            const Q = QUALITY[$('al-quality').value] || QUALITY.mid;
+            btn.disabled = true;
+            try {
+              const track = routeToTrack(route);
+              if (!track) { err.textContent = '이 경로에는 시간 기록이 없어서 지도 위 시간 맞춤은 건너뛰었어요. (사진 GPS는 그대로 써요)'; err.hidden = false; }
+              const stats = track ? albumStats(route, track) : null;
+              const photos = []; photoFiles = {};
+              for (let i = 0; i < files.length; i++) {
+                prog.textContent = '사진 ' + (i + 1) + '/' + files.length + ' 읽는 중…';
+                const f = files[i];
+                const info = X.describe(await readExif(f), f.name, f.lastModified, tzMin);
+                const ph = Object.assign({ name: f.name }, info);
+                ph.thumb = await thumb(f, Q.side, Q.q); ph.pid = i; ph.file = f; photoFiles[i] = f;
+                photos.push(ph);
+              }
+              photos.forEach((p) => place(p, track, shiftSec));
+              photos.sort((a, b) => (a.tAdj == null) - (b.tAdj == null) || a.tAdj - b.tAdj);
+              const pr = makePr(track, photos);
+              let bgUrl = null, bg = null, bgCredit = '';
+              if (pr && $('al-bg').checked) {
+                prog.textContent = '배경 지도 받는 중…';
+                const kind = $('al-bgkind').value, detail = 0;
+                try { bg = await basemap(pr, kind, detail); } catch (e) { bg = null; }
+                if (!bg && kind !== 'osm') { // 지형 지도가 안 되면 일반 지도로 한 번 더
+                  prog.textContent = '지형 지도를 못 받아 일반 지도로 다시 시도해요…';
+                  try { bg = await basemap(pr, 'osm', detail); } catch (e) { bg = null; }
+                }
+                bgUrl = bg ? bg.url : null; bgCredit = bg ? bg.credit : '';
+                if (!bgUrl) { err.textContent = '배경 지도를 불러오지 못해 길만 표시했어요. (인터넷 연결을 확인하거나 배경 지도를 끄고 만들 수 있어요)'; err.hidden = false; }
+              }
+              const title = $('al-title').value.trim() || routeTitle(route);
+              $('al-out').innerHTML = '<div class="bar noprint" style="margin:0 0 10px"><button class="btn primary" id="al-doPrint" type="button">🖨 PDF로 저장 / 인쇄</button>' +
+                '<button class="btn" id="al-doSave" type="button">💾 HTML 파일로 저장</button>' +
+                '<button class="btn" id="al-doShare" type="button">📤 사진 공유 준비 (블로그 앱으로)</button><span id="al-shareBtns"></span></div>' + buildReport(title, track, photos, pr, bgUrl, bgCredit, stats);
+              $('al-doPrint').onclick = printReport;
+              $('al-doSave').onclick = () => saveHtml(title);
+              $('al-doShare').onclick = () => prepareShare();
+              const located = photos.filter((p) => p.loc.how !== 'none').length;
+              prog.textContent = '완료: 사진 ' + photos.length + '장 중 위치 확인 ' + located + '장 (사진 GPS ' + photos.filter((p) => p.loc.how === 'photo').length + ' · GPX 맞춤 ' + photos.filter((p) => p.loc.how === 'track' || p.loc.how === 'edge').length + ')';
+              $('al-out').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (e) { err.textContent = '리포트를 만들지 못했어요: ' + (e && e.message || e); err.hidden = false; }
+            btn.disabled = false;
+          }
+
+          // 인쇄할 때는 앨범 리포트만 나오게 한다 (앱 화면은 숨김)
+          function printReport() {
+            const root = document.documentElement, body = document.body;
+            root.classList.add('al-printing'); body.classList.add('al-printing');
+            const done = () => { root.classList.remove('al-printing'); body.classList.remove('al-printing'); window.removeEventListener('afterprint', done); };
+            window.addEventListener('afterprint', done);
+            setTimeout(done, 120000); // 안전장치
+            window.print();
+          }
+
+          function saveHtml(title) {
+            const css = document.getElementById('albumCss').textContent;
+            const clone = $('al-rp').cloneNode(true);
+            clone.querySelectorAll('.addmemo').forEach((el) => el.remove());
+            clone.querySelectorAll('.memo').forEach((el) => { if (el.hidden || !el.textContent.trim()) el.remove(); else el.removeAttribute('contenteditable'); });
+            const html = '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + esc(title) + '</title><style>body{margin:0}' + css + '</style></head><body><div id="album-modal" class="al-saved"><div class="al-wrap">' + clone.outerHTML + '</div></div></body></html>';
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+            a.download = (title.replace(/[\\/:*?"<>|]+/g, '_') || 'album') + '.html';
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+          }
+
+
+          // ---- 공유: 사진·지도 이미지를 휴대폰 공유 창으로 보낸다 (서버 전송 없음). 되돌리기: git tag album-before-share ----
+          function dataUrlBytes(u) { const b = atob(u.slice(u.indexOf(',') + 1)), a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+          function svgToCanvas(svg, scale) { // 화면의 SVG 한 장을 그림으로 (배경 지도 정의를 함께 넣는다)
+            return new Promise((resolve) => {
+              const vb = svg.getAttribute('viewBox').split(/\s+/).map(Number), w = Math.round(vb[2] * scale), h = Math.round(vb[3] * scale);
+              const c = svg.cloneNode(true);
+              c.setAttribute('xmlns', 'http://www.w3.org/2000/svg'); c.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+              c.setAttribute('width', w); c.setAttribute('height', h); c.removeAttribute('class');
+              const bg = document.getElementById('al-bgmap');
+              if (bg && c.querySelector('use')) c.insertAdjacentHTML('afterbegin', '<defs>' + bg.outerHTML + '</defs>');
+              const img = new Image();
+              img.onload = () => {
+                const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+                const g = cv.getContext('2d'); g.fillStyle = '#f8fafc'; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h);
+                resolve(cv);
+              };
+              img.onerror = () => resolve(null);
+              img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(c));
+            });
+          }
+
+          const canvasJpg = (cv) => dataUrlBytes(cv.toDataURL('image/jpeg', 0.92));
+          function wrapLines(g, text, maxW) { // 글자 단위로 줄바꿈(한글은 띄어쓰기가 적어서)
+            const out = []; let cur = '';
+            for (const ch of text) { if (g.measureText(cur + ch).width > maxW && cur) { out.push(cur); cur = ch; } else cur += ch; }
+            if (cur) out.push(cur); return out;
+          }
+          // 장면 카드: 왼쪽 2/3 지도 + 오른쪽 1/3 시간·고도 내용(+메모) 을 한 장의 그림으로
+          async function sceneCard(ch, n) {
+            const mini = ch.querySelector('svg.mini'); if (!mini) return null;
+            const W = 1440, mw = Math.round(W * 0.48) - 8, pad = 18;
+            const m = await svgToCanvas(mini, 3); if (!m) return null;
+            const mh = Math.round(m.height * mw / m.width), ix = mw + pad * 2, iw = W - ix - pad;
+            const rows = []; // {t, size, bold, color}
+            const tm = (ch.querySelector('.ctitle b') || {}).textContent || '';
+            ch.querySelectorAll('.cinfo > span, .cinfo .warn').forEach((x) => {
+              const cls = x.className || '';
+              rows.push({ t: x.textContent.replace(/\s+/g, ' ').trim(), size: 40, color: /stay/.test(cls) ? '#c2410c' : /warn/.test(cls) ? '#b45309' : '#334155' });
+            });
+            const memoEl = ch.querySelector('.memo:not([hidden])'), memo = memoEl && memoEl.textContent.trim();
+            const cv = document.createElement('canvas'); cv.width = W; const g0 = cv.getContext('2d');
+            // 높이 계산
+            g0.font = 'bold 54px sans-serif'; const tl = wrapLines(g0, tm, iw - 90);
+            let y = pad + 8 + tl.length * 64 + 12; const laid = [];
+            rows.forEach((r) => { g0.font = r.size + 'px sans-serif'; const ls = wrapLines(g0, r.t, iw); laid.push({ r, ls, y }); y += ls.length * 52 + 10; });
+            g0.font = '42px sans-serif'; const ml = memo ? wrapLines(g0, memo, W - pad * 4) : [];
+            const top = Math.max(mh + pad * 2, y + pad), memoH = memo ? ml.length * 58 + 44 : 0;
+            cv.height = top + memoH; const g = cv.getContext('2d');
+            g.fillStyle = '#fff'; g.fillRect(0, 0, W, cv.height); g.textBaseline = 'top';
+            g.drawImage(m, pad, pad, mw, mh);
+            g.strokeStyle = '#e2e8f0'; g.lineWidth = 2; g.strokeRect(pad, pad, mw, mh);
+            g.fillStyle = '#ea580c'; g.beginPath(); g.arc(ix + 34, pad + 8 + 34, 34, 0, Math.PI * 2); g.fill();
+            g.fillStyle = '#fff'; g.font = 'bold 40px sans-serif'; g.textAlign = 'center'; g.fillText(String(n), ix + 34, pad + 8 + 15); g.textAlign = 'left';
+            g.fillStyle = '#0f172a'; g.font = 'bold 54px sans-serif'; tl.forEach((l, i) => g.fillText(l, ix + 84, pad + 8 + i * 64 + 4));
+            laid.forEach((o) => { g.fillStyle = o.r.color; g.font = o.r.size + 'px sans-serif'; o.ls.forEach((l, i) => g.fillText(l, ix, o.y + i * 52)); });
+            if (memo) {
+              g.fillStyle = '#fffbeb'; g.fillRect(pad, top, W - pad * 2, memoH - 8);
+              g.fillStyle = '#1e293b'; g.font = '42px sans-serif'; ml.forEach((l, i) => g.fillText(l, pad * 2, top + 22 + i * 58));
+            }
+            return cv;
+          }
+          // 블로그가 20MB 넘는 파일을 거부하므로, 넘는 사진만 화질을 조금씩 낮춰 19MB 이하로 다시 저장한다(나머지는 원본 그대로)
+          async function fitUnder(file, limit) {
+            if (file.size <= limit) return file;
+            const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+            let k = 1;
+            for (let round = 0; round < 6; round++) {
+              const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+              cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+              for (const q of [0.95, 0.9, 0.85, 0.8, 0.7]) {
+                const blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', q));
+                if (blob && blob.size <= limit) { if (bmp.close) bmp.close(); return new File([blob], file.name, { type: 'image/jpeg' }); }
+              }
+              k *= 0.85;
+            }
+            if (bmp.close) bmp.close();
+            return file;
+          }
+          async function prepareShare() {
+            const prog = $('al-progress'), rp = $('al-rp'), pad = (n) => String(n).padStart(2, '0'), box = $('al-shareBtns'), main = $('al-doShare');
+            main.disabled = true; box.innerHTML = '';
+            const items = []; // {name, blob}
+            const add = (name, bytes, type) => items.push({ name, blob: new Blob([bytes], { type }) });
+            try {
+              prog.textContent = '지도 이미지 만드는 중…';
+              const ov = rp.querySelector('svg.map');
+              if (ov) { const c = await svgToCanvas(ov, 1.6); if (c) add('00_전체지도.jpg', canvasJpg(c), 'image/jpeg'); }
+              const chaps = Array.from(rp.querySelectorAll('.chap'));
+              for (let i = 0; i < chaps.length; i++) {
+                const ch = chaps[i], n = pad(i + 1);
+                prog.textContent = '장면 ' + (i + 1) + '/' + chaps.length + ' 준비 중…';
+                const card = await sceneCard(ch, i + 1);
+                if (card) add(n + '_장면.jpg', canvasJpg(card), 'image/jpeg');
+                const imgs = Array.from(ch.querySelectorAll('.shots img'));
+                for (let k = 0; k < imgs.length; k++) {
+                  const im = imgs[k], nm = n + '_사진' + (k + 1) + '.jpg', of = photoFiles[im.dataset.pid];
+                  if (of) { let f = of; try { f = await fitUnder(of, 19 * 1024 * 1024); } catch (e) { f = of; } add(nm, f, f.type || 'image/jpeg'); } // 사진은 원본 그대로(20MB 넘는 것만 줄임)
+                  else add(nm, dataUrlBytes(im.src), 'image/jpeg');
+                }
+              }
+            } catch (e) { prog.textContent = '준비 중 오류: ' + e.message; main.disabled = false; return; }
+            const files = items.map((x) => new File([x.blob], x.name, { type: x.blob.type }));
+            const can = navigator.canShare && navigator.canShare({ files: files.slice(0, 1) });
+            if (!can) { prog.textContent = '이 브라우저는 파일 공유를 지원하지 않아요. (안드로이드 크롬에서 열어 주세요)'; main.disabled = false; return; }
+            // 크롬은 한 번에 공유할 수 있는 파일 수를 제한한다(약 10개). 그래서 ① 전체를 기기에 저장해 블로그 앱에서 한꺼번에 고르거나 ② 10장씩 공유한다.
+            const slug = (($('al-title').value || routeTitle(albumRoute) || 'album').replace(/[\\/:*?"<>|\s]+/g, '_')).slice(0, 20);
+            const saveBtn = document.createElement('button');
+            saveBtn.type = 'button'; saveBtn.className = 'btn primary'; saveBtn.style.marginLeft = '6px';
+            saveBtn.textContent = '📥 이미지 ' + files.length + '장 기기에 저장';
+            saveBtn.onclick = async () => {
+              saveBtn.disabled = true;
+              // 갤러리는 '최신 저장'이 맨 위라서, 이야기 순서가 위에서부터 되도록 마지막 파일부터 저장한다
+              for (let k = 0; k < files.length; k++) {
+                const i = files.length - 1 - k;
+                const a = document.createElement('a'); a.href = URL.createObjectURL(files[i]); a.download = slug + '_' + files[i].name;
+                document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 20000);
+                prog.textContent = '저장 중… ' + (k + 1) + '/' + files.length + ' (초 단위로 순서를 맞추느라 천천히 저장해요)';
+                await new Promise((r) => setTimeout(r, 1100));
+              }
+              prog.textContent = '저장 완료: ' + files.length + '장 (다운로드 폴더). 블로그 앱 사진 추가에서 갤러리의 "다운로드" 앨범을 열어 한꺼번에 고르세요.';
+              saveBtn.disabled = false;
+            };
+            box.appendChild(saveBtn);
+            for (let i = 0; i < files.length; i += 10) {
+              const part = files.slice(i, i + 10), b = document.createElement('button');
+              b.type = 'button'; b.className = 'btn'; b.style.marginLeft = '6px'; b.textContent = '📤 공유 ' + (i + 1) + '~' + (i + part.length);
+              b.onclick = async () => {
+                try { await navigator.share({ files: part }); b.textContent = '✓ ' + b.textContent.slice(2); }
+                catch (e) { if (e && e.name !== 'AbortError') prog.textContent = '공유 실패(' + (e && e.name) + ')'; }
+              };
+              box.appendChild(b);
+            }
+            prog.textContent = '준비 완료: 이미지 ' + files.length + '장. 같은 글에 다 올리려면 \'기기에 저장\'을 누른 뒤 블로그 앱에서 한꺼번에 고르세요. (공유 창은 한 번에 10장까지만 돼요)';
+            main.disabled = false;
+          }
+
+          // 메모: '✎ 메모 추가'를 눌러야 입력칸이 열리고, 내용이 없으면 다시 접힌다
+          $('al-out').addEventListener('click', (e) => {
+            const b = e.target.closest('.addmemo');
+            if (!b) return;
+            const m = b.parentNode.querySelector('.memo');
+            b.hidden = true; m.hidden = false; m.focus();
+          });
+          $('al-out').addEventListener('focusout', (e) => {
+            const m = e.target.closest && e.target.closest('.memo');
+            if (!m || m.textContent.trim()) return;
+            m.textContent = ''; m.hidden = true;
+            const b = m.parentNode.querySelector('.addmemo'); if (b) b.hidden = false;
+          });
+
+          $('al-make').addEventListener('click', make);
+
+          // ---- 열기/닫기 ----
+          function openAlbum() {
+            if (!currentRouteData || !currentRouteData.points || !currentRouteData.points.length) { showToast('열려 있는 경로가 없습니다.'); return; }
+            if (albumRoute !== currentRouteData) { // 다른 경로면 이전 결과를 비운다
+              albumRoute = currentRouteData;
+              $('al-out').innerHTML = ''; $('al-progress').textContent = ''; $('al-err').hidden = true; $('al-title').value = '';
+            }
+            closeDetailModal();
+            $('al-route-info').textContent = routeTitle(albumRoute) + ' · ' + (albumRoute.totalDist / 1000).toFixed(2) + ' km';
+            $('al-title').placeholder = routeTitle(albumRoute);
+            $('album-modal').classList.remove('hidden');
+            $('album-modal').scrollTop = 0;
+          }
+          function closeAlbum() { $('album-modal').classList.add('hidden'); }
+          window.openAlbum = openAlbum; window.closeAlbum = closeAlbum;
+        })();
+        // ===== ALBUM END =====
     </script>
 </body>
 </html>
