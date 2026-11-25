@@ -75,7 +75,7 @@
 <body class="flex flex-col h-[100dvh] text-gray-100 relative">
 
     <!-- 지도 영역 -->
-    <div id="map" class="flex-1 w-full relative z-0"><div id="app-version" class="absolute left-1.5 bottom-1 z-[800] text-[10px] text-white/70 pointer-events-none select-none" style="text-shadow:0 0 3px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.9)">v0.54</div></div>
+    <div id="map" class="flex-1 w-full relative z-0"><div id="app-version" class="absolute left-1.5 bottom-1 z-[800] text-[10px] text-white/70 pointer-events-none select-none" style="text-shadow:0 0 3px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.9)"></div></div>
 
     <!-- 그래프 영역 -->
     <div id="graph-container" class="w-full h-[25%] hidden flex-col bg-gray-800 border-t border-gray-700 z-10 shrink-0">
@@ -315,7 +315,7 @@
       <div class="al-wrap">
         <div class="card noprint" id="al-setup">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-            <h1>📸 이 경로로 앨범 만들기</h1>
+            <h1>📸 이 경로로 앨범 만들기 <span id="al-ver" class="muted sm" style="font-weight:400;opacity:.6"></span></h1>
             <button type="button" class="btn" onclick="closeAlbum()">닫기</button>
           </div>
           <div class="muted sm" id="al-route-info"></div>
@@ -348,6 +348,9 @@
     <div id="toast" class="fixed bottom-10 left-1/2 bg-gray-800/95 text-white px-5 py-2.5 rounded-full shadow-2xl z-[9999] transition-all duration-300 toast-hide border border-gray-700 text-sm font-medium backdrop-blur-sm whitespace-nowrap"></div>
 
     <script>
+        // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
+        const APP_VERSION = 'v0.55';
+        ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
         // ===== 지도 종류 =====
@@ -2878,7 +2881,7 @@
             h += '<section class="rp-sec story"><h2>이야기</h2>';
             let prev = null;
             chapters.forEach((c) => { h += chapterHTML(c, prev, track, cum, chapters, pr, !!bgUrl); if (c.idx != null) prev = c; });
-            h += '</section><div class="foot">이 리포트는 이 기기에서만 만들어졌고 서버에 저장되지 않았어요 · 만든 날 ' + esc(new Date().toISOString().slice(0, 10)) + '</div></article>';
+            h += '</section><div class="foot">이 리포트는 이 기기에서만 만들어졌고 서버에 저장되지 않았어요 · 만든 날 ' + esc(new Date().toISOString().slice(0, 10)) + ' · GPX Tracker ' + APP_VERSION + '</div></article>';
             return h;
           }
 
