@@ -1990,8 +1990,6 @@
                 <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">최고경사 1위</span><span class="text-yellow-400 font-bold">${formatGrad(steep1)}</span></div>
                 <div class="flex justify-between"><span class="text-gray-400">최고경사 2위</span><span class="text-yellow-400 font-bold">${formatGrad(steep2)}</span></div>
 
-                <button onclick="openAlbum()" class="w-full bg-sky-600 hover:bg-sky-500 text-white py-2 rounded-lg text-sm font-bold active:scale-95 transition">📸 이 경로로 앨범 만들기</button>
-
                 <div class="border-t border-gray-700 pt-3 space-y-2">
                     <div class="text-gray-300 font-bold">예상 소모 칼로리</div>
                     <div class="grid grid-cols-2 gap-2 text-center">
@@ -2035,6 +2033,10 @@
                     </label>
                     <button onclick="saveRouteUserLog()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-bold active:scale-95 transition">기록 저장</button>
                     <div id="log-saved-at" class="text-[10px] text-gray-500 text-right"></div>
+                </div>
+
+                <div class="border-t border-gray-700 pt-3">
+                    <button onclick="openAlbum()" class="w-full bg-sky-600 hover:bg-sky-500 text-white py-2 rounded-lg text-sm font-bold active:scale-95 transition">📸 이 경로로 앨범 만들기</button>
                 </div>
             `;
 
