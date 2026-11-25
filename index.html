@@ -75,7 +75,7 @@
 <body class="flex flex-col h-[100dvh] text-gray-100 relative">
 
     <!-- 지도 영역 -->
-    <div id="map" class="flex-1 w-full relative z-0"><div id="app-version" class="absolute left-1.5 bottom-1 z-[800] text-[10px] text-white/70 pointer-events-none select-none" style="text-shadow:0 0 3px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.9)">v0.53</div></div>
+    <div id="map" class="flex-1 w-full relative z-0"><div id="app-version" class="absolute left-1.5 bottom-1 z-[800] text-[10px] text-white/70 pointer-events-none select-none" style="text-shadow:0 0 3px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.9)">v0.54</div></div>
 
     <!-- 그래프 영역 -->
     <div id="graph-container" class="w-full h-[25%] hidden flex-col bg-gray-800 border-t border-gray-700 z-10 shrink-0">
@@ -2713,6 +2713,7 @@
               }
             };
             await Promise.all([worker(), worker(), worker()]);
+            return list.filter((c) => !c.mini).length; // 못 받은 장면 수
           }
           // 이 지도 범위 안(+여백)을 지나는 구간만 골라 선으로 (길게 이어진 종주 경로 전체를 장면마다 다시 그리지 않도록)
           function miniLines(track, pm, a, b) {
@@ -2856,7 +2857,7 @@
             photos.forEach((p) => { p._trackStart = track ? track[0].t : 0; });
             const stays = track ? C.findStays(track, 60, 300) : [];
             const chapters = chaptersOf(photos, track, stays);
-            if (miniOpt && miniOpt.kind) await buildMiniMaps(chapters, miniOpt.kind, miniOpt.progress);
+            if (miniOpt && miniOpt.kind) miniOpt.failed = await buildMiniMaps(chapters, miniOpt.kind, miniOpt.progress);
             const cum = [0];
             if (track) for (let i = 1; i < track.length; i++) cum.push(cum[i - 1] + C.haversineKm([track[i - 1].lat, track[i - 1].lon], [track[i].lat, track[i].lon]));
             const first = stats ? stats.start : (photos.find((p) => p.tAdj != null) || {}).tAdj;
@@ -2943,10 +2944,12 @@
                 bgUrl = bg ? bg.url : null; bgCredit = bg ? bg.credit : '';
                 if (!bgUrl) { err.textContent = '배경 지도를 불러오지 못해 길만 표시했어요. (인터넷 연결을 확인하거나 배경 지도를 끄고 만들 수 있어요)'; err.hidden = false; }
               }
+              const miniOpt = bgUrl ? { kind: usedKind, progress: (t) => { prog.textContent = t; } } : null;
               const title = $('al-title').value.trim() || routeTitle(route);
               $('al-out').innerHTML = '<div class="bar noprint" style="margin:0 0 10px"><button class="btn primary" id="al-doPrint" type="button">🖨 PDF로 저장 / 인쇄</button>' +
                 '<button class="btn" id="al-doSave" type="button">💾 HTML 파일로 저장</button>' +
-                '<button class="btn" id="al-doShare" type="button">📤 사진 공유 준비 (블로그 앱으로)</button><span id="al-shareBtns"></span></div>' + (await buildReport(title, track, photos, pr, bgUrl, bgCredit, stats, bgUrl ? { kind: usedKind, progress: (t) => { prog.textContent = t; } } : null));
+                '<button class="btn" id="al-doShare" type="button">📤 사진 공유 준비 (블로그 앱으로)</button><span id="al-shareBtns"></span></div>' + (await buildReport(title, track, photos, pr, bgUrl, bgCredit, stats, miniOpt));
+              if (miniOpt && miniOpt.failed) { err.textContent = '장면 지도 ' + miniOpt.failed + '곳은 확대 지도를 받지 못해 전체 지도를 잘라 보여 줘요. (잠시 후 다시 만들어 보세요)'; err.hidden = false; }
               $('al-doPrint').onclick = printReport;
               $('al-doSave').onclick = () => saveHtml(title);
               $('al-doShare').onclick = () => prepareShare();
