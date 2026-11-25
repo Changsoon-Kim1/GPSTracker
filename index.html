@@ -80,14 +80,17 @@
     <!-- 그래프 영역 -->
     <div id="graph-container" class="w-full h-[25%] hidden flex-col bg-gray-800 border-t border-gray-700 z-10 shrink-0">
         <div class="flex justify-between items-center px-3 h-[28px] shrink-0 bg-gray-900 text-[11px] text-gray-400 border-b border-gray-800">
-            <span class="font-mono">고도 / 속도 프로파일 (길게 누르면 구간 분석)</span>
-            <label class="flex items-center space-x-1 cursor-pointer">
-                <input type="checkbox" id="speed-toggle" class="rounded text-blue-500 focus:ring-0 w-3 h-3" onchange="drawGraph(currentScrubDist)">
-                <span class="text-gray-300">속도 표시</span>
-            </label>
+            <span id="graph-title" class="font-mono truncate min-w-0">고도 / 속도 프로파일 (길게 누르면 구간 분석)</span>
+            <div class="flex items-center space-x-2 shrink-0 ml-2">
+                <button id="graph-reset-btn" type="button" onclick="resetGraphView()" class="hidden bg-cyan-700 hover:bg-cyan-600 text-white px-2 py-0.5 rounded text-[11px] font-bold active:scale-95">전체 보기</button>
+                <label class="flex items-center space-x-1 cursor-pointer">
+                    <input type="checkbox" id="speed-toggle" class="rounded text-blue-500 focus:ring-0 w-3 h-3" onchange="drawGraph(currentScrubDist)">
+                    <span class="text-gray-300">속도 표시</span>
+                </label>
+            </div>
         </div>
         <div class="flex-1 relative w-full" id="canvas-wrapper">
-            <canvas id="profile-canvas" class="absolute inset-0 w-full h-full block cursor-pointer"></canvas>
+            <canvas id="profile-canvas" class="absolute inset-0 w-full h-full block cursor-pointer" style="touch-action:none"></canvas>
         </div>
     </div>
 
@@ -470,11 +473,82 @@
 
         function resizeCanvas() {
             if (canvas.offsetWidth === 0) return;
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = Math.round(canvas.offsetWidth * dpr);
+            canvas.height = Math.round(canvas.offsetHeight * dpr);
             if (currentRouteData) drawGraph(currentScrubDist);
         }
         window.addEventListener('resize', resizeCanvas);
+
+        // ===== 그래프 가로 확대/축소 (두 손가락, 마우스 휠, 전체 보기 버튼, 두 번 탭) =====
+        const GRAPH_MIN_SPAN_M = 200;           // 가장 많이 확대했을 때 화면에 보이는 거리
+        let gZoomed = false, gV0 = 0, gV1 = 0;  // 확대 시 보이는 거리 범위(m)
+        const graphViewLayerGroup = L.layerGroup().addTo(map);
+        function graphMax() {
+            const p = currentRouteData && currentRouteData.points;
+            return p && p.length ? (p[p.length - 1].cumDist || 1) : 1;
+        }
+        function graphView() { return gZoomed ? [gV0, gV1] : [0, graphMax()]; }
+        let gRedrawQueued = false;
+        function scheduleGraphRedraw() {
+            if (gRedrawQueued) return;
+            gRedrawQueued = true;
+            requestAnimationFrame(() => {
+                gRedrawQueued = false;
+                if (currentRouteData) drawGraph(currentScrubDist);
+            });
+        }
+        let gHlTimer = null;
+        function updateGraphViewUi() {
+            const btn = document.getElementById('graph-reset-btn');
+            const title = document.getElementById('graph-title');
+            if (btn) btn.classList.toggle('hidden', !gZoomed);
+            if (title) {
+                title.textContent = gZoomed
+                    ? `🔍 ${(gV0 / 1000).toFixed(2)} ~ ${(gV1 / 1000).toFixed(2)} km (${Math.round(gV1 - gV0)} m)`
+                    : '고도 / 속도 프로파일 (길게 누르면 구간 분석)';
+            }
+            // 지도에 확대한 구간을 강조 (제스처 중 과도한 갱신을 막기 위해 살짝 지연)
+            clearTimeout(gHlTimer);
+            gHlTimer = setTimeout(() => {
+                graphViewLayerGroup.clearLayers();
+                if (!gZoomed || !currentRouteData) return;
+                const seg = currentRouteData.points.filter(p => p.cumDist >= gV0 && p.cumDist <= gV1);
+                if (seg.length > 1) L.polyline(seg.map(p => [p.lat, p.lon]), { color: '#22d3ee', weight: 8, opacity: 0.75, interactive: false }).addTo(graphViewLayerGroup);
+            }, 80);
+        }
+        function setGraphRange(v0, span) {
+            const m = graphMax();
+            span = Math.max(Math.min(GRAPH_MIN_SPAN_M, m), Math.min(span, m));
+            if (span >= m * 0.999) { resetGraphView(); return; }
+            v0 = Math.max(0, Math.min(v0, m - span));
+            gV0 = v0; gV1 = v0 + span; gZoomed = true;
+            updateGraphViewUi();
+            scheduleGraphRedraw();
+        }
+        function zoomGraphAround(anchorDist, frac, span) { setGraphRange(anchorDist - frac * span, span); }
+        function resetGraphView() {
+            gZoomed = false;
+            updateGraphViewUi();
+            scheduleGraphRedraw();
+        }
+        // 그래프 계산 캐시 (확대/이동 중 매 프레임 재계산하지 않도록)
+        let gStat = null;
+        function graphStats(pts) {
+            if (gStat && gStat.pts === pts) return gStat;
+            let minEle = Infinity, maxEle = -Infinity;
+            for (const p of pts) { const e = p.ele || 0; if (e < minEle) minEle = e; if (e > maxEle) maxEle = e; }
+            const speeds = pts.map(p => p.speed || 0).filter(v => !isNaN(v)).sort((a, b) => a - b);
+            let maxSpeed = speeds.length ? (speeds[Math.floor(speeds.length * 0.95)] || 10) : 10;
+            if (maxSpeed < 10) maxSpeed = 10;
+            gStat = { pts, minEle, maxEle, maxSpeed };
+            return gStat;
+        }
+        function graphLowerBound(pts, d) {
+            let lo = 0, hi = pts.length - 1;
+            while (lo < hi) { const mid = (lo + hi) >> 1; if ((pts[mid].cumDist || 0) < d) lo = mid + 1; else hi = mid; }
+            return lo;
+        }
 
         // 사용자가 확대·축소(+/- 버튼, 손가락 두 개, 마우스 휠, 더블탭)하면 현재 지도 레벨 숫자를 1초 정도 표시
         // 경로를 열 때 자동으로 맞춰지는 확대에는 표시하지 않는다.
@@ -1183,6 +1257,7 @@
                 route.totalAscent = ad.asc; route.totalDescent = ad.desc;
             }
             currentRouteData = route;
+            resetGraphView();
             allRoutesLayerGroup.clearLayers();
             steepMarkersLayerGroup.clearLayers();
             clearRestMarkers();
@@ -1286,6 +1361,9 @@
                     }
                 }
                 currentScrubDist = closest.cumDist;
+                if (gZoomed && (currentScrubDist < gV0 || currentScrubDist > gV1)) {
+                    setGraphRange(currentScrubDist - (gV1 - gV0) / 2, gV1 - gV0);
+                }
                 drawGraph(currentScrubDist);
             });
 
@@ -1452,7 +1530,9 @@
 
         function drawGraph(scrubDist = -1) {
             if (!currentRouteData || !canvas.offsetWidth) return;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const dpr = canvas.width / canvas.offsetWidth;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
             
             const pts = currentRouteData.points;
             if (pts.length === 0) return;
@@ -1461,54 +1541,52 @@
             
             const padTop = 30;
             const padBot = 35;
-            const h = canvas.height;
-            const w = canvas.width;
+            const h = canvas.offsetHeight;
+            const w = canvas.offsetWidth;
             
             const usableH = h - padTop - padBot;
             const eleBot = h - padBot;
 
             const maxDist = pts[pts.length - 1].cumDist || 1;
-            const minEle = Math.min(...pts.map(p => p.ele || 0));
-            const maxEle = Math.max(...pts.map(p => p.ele || 0));
+            const st = graphStats(pts);
+            const minEle = st.minEle, maxEle = st.maxEle;
             const eleRange = (maxEle - minEle) || 1;
+            const maxSpeed = st.maxSpeed;
 
-            let maxSpeed = 10;
-            if (showSpeed) {
-                const speeds = pts.map(p => p.speed || 0).filter(s => !isNaN(s)).sort((a,b) => a-b);
-                if (speeds.length > 0) {
-                    maxSpeed = speeds[Math.floor(speeds.length * 0.95)] || 10;
-                    if (maxSpeed < 10) maxSpeed = 10;
-                }
-            }
+            const [v0, v1] = graphView();
+            const vSpan = (v1 - v0) || 1;
+            const i0 = Math.max(0, graphLowerBound(pts, v0) - 1);
+            const i1 = Math.min(pts.length - 1, graphLowerBound(pts, v1) + 1);
 
-            const getX = d => (d / maxDist) * w;
+            const getX = d => ((d - v0) / vSpan) * w;
             const getY = e => eleBot - ((e - minEle) / eleRange) * usableH;
             const getSpeedY = s => eleBot - (Math.min(s, maxSpeed * 1.2) / (maxSpeed * 1.2)) * usableH;
 
             ctx.beginPath();
-            ctx.moveTo(getX(pts[0].cumDist), eleBot);
-            for(let i=0; i<pts.length; i++) ctx.lineTo(getX(pts[i].cumDist), getY(pts[i].ele || 0));
-            ctx.lineTo(getX(pts[pts.length-1].cumDist), eleBot);
+            ctx.moveTo(getX(pts[i0].cumDist), eleBot);
+            for(let i=i0; i<=i1; i++) ctx.lineTo(getX(pts[i].cumDist), getY(pts[i].ele || 0));
+            ctx.lineTo(getX(pts[i1].cumDist), eleBot);
             ctx.fillStyle = 'rgba(234, 179, 8, 0.15)'; 
             ctx.fill();
 
             ctx.beginPath();
-            for(let i=0; i<pts.length; i++) ctx.lineTo(getX(pts[i].cumDist), getY(pts[i].ele || 0));
+            for(let i=i0; i<=i1; i++) ctx.lineTo(getX(pts[i].cumDist), getY(pts[i].ele || 0));
             ctx.strokeStyle = '#eab308'; 
             ctx.lineWidth = 1.5; 
             ctx.stroke();
 
             if (showSpeed) {
                 ctx.beginPath();
-                for(let i=0; i<pts.length; i++) ctx.lineTo(getX(pts[i].cumDist), getSpeedY(pts[i].speed || 0));
+                for(let i=i0; i<=i1; i++) ctx.lineTo(getX(pts[i].cumDist), getSpeedY(pts[i].speed || 0));
                 ctx.strokeStyle = '#3b82f6'; 
                 ctx.lineWidth = 1.5; 
                 ctx.stroke();
             }
 
             ctx.fillStyle = '#9ca3af'; ctx.font = '10px sans-serif';
-            ctx.textAlign = 'left'; ctx.fillText('0km', 5, h - 5);
-            ctx.textAlign = 'right'; ctx.fillText(`${(maxDist/1000).toFixed(1)}km`, w - 5, h - 5);
+            const fmtKm = d => gZoomed ? `${(d/1000).toFixed(vSpan < 3000 ? 2 : 1)}km` : (d === 0 ? '0km' : `${(d/1000).toFixed(1)}km`);
+            ctx.textAlign = 'left'; ctx.fillText(fmtKm(v0), 5, h - 5);
+            ctx.textAlign = 'right'; ctx.fillText(fmtKm(v1), w - 5, h - 5);
             ctx.textAlign = 'left';
 
             if (scrubDist >= 0) {
@@ -1522,11 +1600,14 @@
                 const cx = getX(closest.cumDist || 0);
                 const cy = getY(closest.ele || 0);
 
+                const inView = cx >= 0 && cx <= w;
+                if (inView) {
                 ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
                 ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 1; ctx.stroke();
 
                 let textX = cx + 5;
                 if (textX > w - 100) textX = cx - 100;
+                if (textX < 2) textX = 2;
 
                 let textY = cy - 10;
                 const textBlockHeight = showSpeed ? 45 : 30;
@@ -1542,6 +1623,7 @@
                 if (showSpeed) {
                     ctx.fillStyle = '#93c5fd';
                     ctx.fillText(`속도: ${(closest.speed || 0).toFixed(1)}km/h`, textX, textY + 30);
+                }
                 }
 
                 let formattedTime = '시간 미상';
@@ -1593,7 +1675,8 @@
         const doScrub = (x) => {
             if(!currentRouteData) return;
             const max = currentRouteData.points[currentRouteData.points.length-1].cumDist;
-            let d = (x / canvas.width) * max;
+            const [v0, v1] = graphView();
+            let d = v0 + (x / canvas.offsetWidth) * (v1 - v0);
             currentScrubDist = Math.max(0, Math.min(d, max));
             drawGraph(currentScrubDist);
         };
@@ -1613,23 +1696,74 @@
             cancelPressTimer(); 
         });
         
-        canvas.addEventListener('touchstart', e => { 
-            isDragging = true; 
-            doScrub(e.touches[0].clientX - canvas.getBoundingClientRect().left); 
-            e.preventDefault(); 
-            startPressTimer(); 
-        });
-        window.addEventListener('touchmove', e => { 
-            if(isDragging) { 
-                doScrub(e.touches[0].clientX - canvas.getBoundingClientRect().left); 
-                e.preventDefault(); 
-                cancelPressTimer(); 
-            } 
-        });
-        window.addEventListener('touchend', () => { 
-            isDragging = false; 
-            cancelPressTimer(); 
-        });
+        // 터치: 손가락 1개 = 훑어보기/길게 누르기, 손가락 2개 = 가로 확대·축소 + 이동, 두 번 탭 = 전체 보기
+        let pinch = null, tapInfo = null, lastTapAt = 0;
+        const touchX = t => t.clientX - canvas.getBoundingClientRect().left;
+        canvas.addEventListener('touchstart', e => {
+            e.preventDefault();
+            if (e.touches.length >= 2) {
+                isDragging = false; cancelPressTimer(); tapInfo = null;
+                const a = e.touches[0], b = e.touches[1];
+                const [v0, v1] = graphView();
+                const mid = (touchX(a) + touchX(b)) / 2;
+                pinch = {
+                    dist: Math.max(20, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)),
+                    span: v1 - v0,
+                    anchor: v0 + (mid / canvas.offsetWidth) * (v1 - v0)
+                };
+                return;
+            }
+            isDragging = true;
+            tapInfo = { t: Date.now(), x: e.touches[0].clientX, y: e.touches[0].clientY, moved: false };
+            doScrub(touchX(e.touches[0]));
+            startPressTimer();
+        }, { passive: false });
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            if (pinch && e.touches.length >= 2) {
+                const a = e.touches[0], b = e.touches[1];
+                const dist = Math.max(20, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY));
+                const mid = (touchX(a) + touchX(b)) / 2;
+                zoomGraphAround(pinch.anchor, mid / canvas.offsetWidth, pinch.span * pinch.dist / dist);
+                return;
+            }
+            if (isDragging && e.touches.length === 1) {
+                const t = e.touches[0];
+                if (tapInfo && Math.hypot(t.clientX - tapInfo.x, t.clientY - tapInfo.y) > 10) tapInfo.moved = true;
+                doScrub(touchX(t));
+                cancelPressTimer();
+            }
+        }, { passive: false });
+        const endTouch = e => {
+            if (e.touches.length < 2) pinch = null;
+            if (e.touches.length === 0) {
+                isDragging = false;
+                cancelPressTimer();
+                const now = Date.now();
+                if (tapInfo && !tapInfo.moved && now - tapInfo.t < 300) {
+                    if (now - lastTapAt < 350) { lastTapAt = 0; if (gZoomed) resetGraphView(); }
+                    else lastTapAt = now;
+                }
+                tapInfo = null;
+            }
+        };
+        canvas.addEventListener('touchend', endTouch);
+        canvas.addEventListener('touchcancel', endTouch);
+
+        // PC: 마우스 휠 = 확대·축소(커서 위치 기준), Shift+휠 = 좌우 이동, 더블클릭 = 전체 보기
+        canvas.addEventListener('wheel', e => {
+            if (!currentRouteData) return;
+            e.preventDefault();
+            const [v0, v1] = graphView();
+            const span = v1 - v0, w = canvas.offsetWidth;
+            const frac = Math.max(0, Math.min(1, (e.clientX - canvas.getBoundingClientRect().left) / w));
+            if (e.shiftKey) {
+                if (gZoomed) setGraphRange(v0 + ((e.deltaY || e.deltaX) / w) * span, span);
+            } else {
+                zoomGraphAround(v0 + frac * span, frac, span * Math.exp(e.deltaY * 0.002));
+            }
+        }, { passive: false });
+        canvas.addEventListener('dblclick', () => { if (gZoomed) resetGraphView(); });
 
         function filterLibrary() {
             const query = document.getElementById('library-search').value.toLowerCase();
@@ -1716,6 +1850,7 @@
                                         if (currentRouteLayer) map.removeLayer(currentRouteLayer);
                                         if (scrubberMarker) { map.removeLayer(scrubberMarker); scrubberMarker = null; }
                                         currentRouteData = null;
+                                        resetGraphView();
                                         resetSectionAnalysis();
                                         steepMarkersLayerGroup.clearLayers();
                                         clearRestMarkers();
@@ -1847,6 +1982,7 @@
             const gContainer = document.getElementById('graph-container');
             gContainer.classList.add('hidden');
             gContainer.classList.remove('flex');
+            resetGraphView();
             
             document.getElementById('top-right-controls').style.display = 'none';
             map.invalidateSize();
