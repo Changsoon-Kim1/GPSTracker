@@ -376,7 +376,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.2.9';
+        const APP_VERSION = 'v0.2.10';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1982,7 +1982,7 @@
             const w = canvas.offsetWidth;
             // 가로 모드처럼 그래프가 낮을 때는 여백을 비율로 줄여 그래프가 뒤집히지 않게 한다
             const padTop = Math.min(30, h * 0.25);
-            const padBot = Math.min(35, h * 0.3);
+            const padBot = Math.min(17, h * 0.3);
             
             const usableH = h - padTop - padBot;
             const eleBot = h - padBot;
