@@ -360,7 +360,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.1.62';
+        const APP_VERSION = 'v0.1.63';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -2786,13 +2786,32 @@
           let photoFiles = {};   // pid -> File (블로그용 내보내기에서 원본을 그대로 쓰기 위해 보관)
           let albumRoute = null; // 앨범을 만드는 경로(열려 있던 경로)
           let albumPlaces = [];  // 주요 지명 [{n, k, e, lat, lon, t}] (PLACES, 경로 위 가장 가까운 점 기준)
-          const PLACE_SYM = { peak: '▲', pass: '◆', hut: '⌂', shelter: '⌂' };
-          const PLACE_COL = { peak: '#b45309', pass: '#047857', hut: '#1d4ed8', shelter: '#2563eb' };
-          // 장면 위치에서 150m 안의 가장 가까운 지명
+          const PLACE_SYM = { peak: '▲', pass: '◆', hut: '⌂', shelter: '⌂', wp: '●' };
+          const PLACE_COL = { peak: '#b45309', pass: '#047857', hut: '#1d4ed8', shelter: '#2563eb', wp: '#db2777' };
+          // 장면 위치에서 150m 안의 가장 가까운 지명. 내가 직접 추가한 웨이포인트(own)가 있으면 그쪽을 먼저 쓴다.
           function nearPlace(loc) {
-            let best = null, bd = 0.15;
-            albumPlaces.forEach((p) => { const d = C.haversineKm([loc.lat, loc.lon], [p.lat, p.lon]); if (d <= bd) { bd = d; best = p; } });
-            return best;
+            let best = null, bd = 0.15, own = null, od = 0.15;
+            albumPlaces.forEach((p) => {
+              const d = C.haversineKm([loc.lat, loc.lon], [p.lat, p.lon]);
+              if (p.own) { if (d <= od) { od = d; own = p; } } else if (d <= bd) { bd = d; best = p; }
+            });
+            return own || best;
+          }
+          // 내 웨이포인트 중 경로에서 150m 안에 있는 것을 앨범 지명 목록에 넣는다 (지난 시각은 경로의 가장 가까운 점에서)
+          async function addOwnWaypoints(route) {
+            let wps = [];
+            try { wps = await getAllWaypointsFromDB(); } catch (e) { return; }
+            const pts = route.points || [];
+            if (!pts.length) return;
+            const cosL = Math.cos(pts[0].lat * Math.PI / 180), M = 111320;
+            wps.forEach((w) => {
+              let bd = Infinity, bi = -1;
+              for (let i = 0; i < pts.length; i += 2) {
+                const dy = (pts[i].lat - w.lat) * M, dx = (pts[i].lon - w.lon) * M * cosL, d = dx * dx + dy * dy;
+                if (d < bd) { bd = d; bi = i; }
+              }
+              if (bi >= 0 && Math.sqrt(bd) <= 150) albumPlaces.push({ n: w.name, k: 'wp', e: null, lat: w.lat, lon: w.lon, t: pts[bi].time || null, own: true });
+            });
           }
           const QUALITY = { low: { side: 640, q: 0.7 }, mid: { side: 1000, q: 0.8 }, high: { side: 1600, q: 0.85 } };
 
@@ -3152,7 +3171,7 @@
             let meta = '';
 
             const np = c.loc ? nearPlace(c.loc) : null;
-            if (np) meta += '<span class="place">📍 ' + esc(np.n) + ' 근처</span>';
+            if (np) meta += '<span class="place">' + (np.own ? '📌 ' : '📍 ') + esc(np.n) + ' 근처</span>';
             if (c.ele != null) meta += '<span>⛰ 고도 ' + Math.round(c.ele) + 'm</span>';
             if (track && c.idx != null) {
               meta += '<span>🚶 출발 후 ' + fmtKm(cum[c.idx]) + ' · ' + durShort((track[c.idx].t - track[0].t) / 1000) + '</span>';
@@ -3243,6 +3262,7 @@
                 const pt = route.points[p.i];
                 return { n: p.n, k: p.k, e: p.e, lat: pt.lat, lon: pt.lon, t: pt.time || null };
               });
+              await addOwnWaypoints(route);
               if (!track) { err.textContent = '이 경로에는 시간 기록이 없어서 지도 위 시간 맞춤은 건너뛰었어요. (사진 GPS는 그대로 써요)'; err.hidden = false; }
               const stats = track ? albumStats(route, track) : null;
               const photos = []; photoFiles = {};
