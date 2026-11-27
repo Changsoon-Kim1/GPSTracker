@@ -397,7 +397,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.3.6';
+        const APP_VERSION = 'v0.3.7';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -3627,7 +3627,7 @@
             const first = stats ? stats.start : (photos.find((p) => p.tAdj != null) || {}).tAdj;
             const last = stats ? stats.end : null;
             let h = '<article class="rp" id="al-rp">' + (bgUrl ? '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><image id="al-bgmap" href="' + bgUrl + '" x="0" y="0" width="' + pr.W + '" height="' + pr.H + '"/></defs></svg>' : '') + '<h1>' + esc(title) + '</h1><div class="rp-sub">' +
-              (first != null ? esc(dayLabel(first)) : '') + (stats ? ' · ' + hm(stats.start) + ' ~ ' + hm(last) : '') + ' · 사진 ' + photos.length + '장 · 장면 ' + chapters.length + '곳</div>';
+              (first != null ? esc(dayLabel(first)) : '') + (stats ? ' · ' + hm(stats.start) + ' ~ ' + (dayKey(last) !== dayKey(stats.start) ? esc(dayLabel(last)) + ' ' : '') + hm(last) : '') + ' · 사진 ' + photos.length + '장 · 장면 ' + chapters.length + '곳</div>';
             if (stats) {
               h += '<section class="rp-sec"><div class="stats">' +
                 '<div><small>거리</small><b>' + stats.km.toFixed(1) + 'km</b></div>' +
