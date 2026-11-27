@@ -397,7 +397,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.3.7';
+        const APP_VERSION = 'v0.3.8';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -3937,12 +3937,11 @@
           // ---- 열기/닫기 ----
           function openAlbum() {
             if (!currentRouteData || !currentRouteData.points || !currentRouteData.points.length) { showToast('열려 있는 경로가 없습니다.'); return; }
-            const sameRoute = albumRoute && String(albumRoute.id) === String(currentRouteData.id);
             albumRoute = currentRouteData;
-            if (!sameRoute) { // 다른 경로면 이전 사진 선택·결과·제목·시계 보정을 모두 비운다
-              $('al-out').innerHTML = ''; $('al-progress').textContent = ''; $('al-err').hidden = true; $('al-title').value = '';
-              $('al-photos').value = ''; $('al-shift').value = '0'; photoFiles = {};
-            }
+            // 열 때마다 새로 시작: 이전 사진 선택·결과·제목·시계 보정·안내를 모두 비운다
+            $('al-out').innerHTML = ''; $('al-progress').textContent = ''; $('al-err').hidden = true; $('al-title').value = '';
+            $('al-photos').value = ''; $('al-shift').value = '0'; photoFiles = {};
+            $('al-make').disabled = false;
             closeDetailModal();
             $('al-route-info').textContent = routeTitle(albumRoute) + ' · ' + (albumRoute.totalDist / 1000).toFixed(2) + ' km';
             $('al-title').placeholder = routeTitle(albumRoute);
