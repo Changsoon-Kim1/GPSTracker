@@ -397,7 +397,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.3.0';
+        const APP_VERSION = 'v0.3.1';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1812,7 +1812,7 @@
         async function loadRoutePhotos(route) {
             const seq = ++photoLoadSeq;
             let list = [];
-            try { list = await photoStoreGet(route && route.id); } catch (e) { list = []; }
+            try { list = await photoStoreGet(route && route.id); } catch (e) { list = []; showToast('지도 사진을 읽지 못했습니다: ' + (e && e.message || e)); }
             if (seq !== photoLoadSeq || route !== currentRouteData) return;
             photoLayerGroup.clearLayers();
             photoUrls.forEach(u => URL.revokeObjectURL(u)); photoUrls = [];
