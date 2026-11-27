@@ -369,7 +369,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.2.3';
+        const APP_VERSION = 'v0.2.4';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1335,7 +1335,7 @@
             clearRestMarkers();
             const restIcon = L.divIcon({
                 className: 'bg-transparent border-none',
-                html: `<div style="width:18px;height:18px;margin:-9px 0 0 -9px;" class="flex items-center justify-center rounded-full bg-indigo-600/95 border border-white shadow-md text-[10px] leading-none">☕</div>`,
+                html: `<div style="width:12.6px;height:12.6px;margin:-6.3px 0 0 -6.3px;font-size:7px;" class="flex items-center justify-center rounded-full bg-indigo-600/95 border border-white shadow-md leading-none">☕</div>`,
                 iconSize: [0, 0],
                 iconAnchor: [0, 0]
             });
