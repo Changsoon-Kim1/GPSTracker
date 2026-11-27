@@ -67,6 +67,8 @@
         .rest-popup a.leaflet-popup-close-button,
         .route-popup a.leaflet-popup-close-button { display: none; }
 
+        /* 가로 모드: 그래프 영역을 조금 더 높게 */
+        @media (orientation: landscape) and (max-height: 500px) { #graph-container { height: 38% !important; } }
         /* 경로 위 지점 정보 말풍선은 지도가 비치도록 더 투명하게 */
         .route-popup .leaflet-popup-content-wrapper { background-color: rgba(17, 24, 39, 0.55); border-color: rgba(75, 85, 99, 0.6); box-shadow: none; }
         .route-popup .leaflet-popup-tip { background-color: rgba(17, 24, 39, 0.55); box-shadow: none; }
@@ -374,7 +376,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.2.8';
+        const APP_VERSION = 'v0.2.9';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1976,10 +1978,11 @@
 
             const showSpeed = document.getElementById('speed-toggle')?.checked || false;
             
-            const padTop = 30;
-            const padBot = 35;
             const h = canvas.offsetHeight;
             const w = canvas.offsetWidth;
+            // 가로 모드처럼 그래프가 낮을 때는 여백을 비율로 줄여 그래프가 뒤집히지 않게 한다
+            const padTop = Math.min(30, h * 0.25);
+            const padBot = Math.min(35, h * 0.3);
             
             const usableH = h - padTop - padBot;
             const eleBot = h - padBot;
