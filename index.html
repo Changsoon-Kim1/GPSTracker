@@ -374,7 +374,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.2.7';
+        const APP_VERSION = 'v0.2.8';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1672,7 +1672,7 @@
                 ctx.fillStyle = K.color; ctx.font = 'bold 10px sans-serif';
                 ctx.fillText(K.sym, x, y - 3);
                 if (x - lastLabelX >= 46) {
-                    ctx.font = '10px sans-serif';
+                    ctx.font = '9px sans-serif';
                     const tw = ctx.measureText(p.n).width;
                     const lx = Math.max(tw / 2 + 2, Math.min(w - tw / 2 - 2, x)), ly = Math.max(11, y - 14);
                     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(17,24,39,0.9)'; ctx.strokeText(p.n, lx, ly);
@@ -2079,7 +2079,7 @@
                 const sign = (closest.gradient || 0) > 0 ? '+' : '';
                 const iconHtml = `
                     <div style="position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; background-color: #22c55e; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.5);"></div>
-                    <div style="position: absolute; left: 0px; top: -42px; transform: translateX(-50%); background-color: rgba(31,41,55,0.5); color: white; padding: 4px 6px; border-radius: 6px; font-size: 10px; white-space: nowrap; border: 1px solid rgba(75,85,99,0.5); text-align: center; line-height: 1.3; text-shadow: 0 0 3px #000, 0 0 3px #000;">
+                    <div style="position: absolute; left: 0px; top: -42px; transform: translateX(-50%); background-color: rgba(31,41,55,0.35); color: white; padding: 4px 6px; border-radius: 6px; font-size: 10px; white-space: nowrap; border: 1px solid rgba(75,85,99,0.35); text-align: center; line-height: 1.3; text-shadow: 0 0 3px #000, 0 0 3px #000;">
                         ${formattedTime}<br><span style="color: #93c5fd; font-weight: bold;">경사: ${sign}${(closest.gradient || 0).toFixed(1)}%</span>
                     </div>
                 `;
