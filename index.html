@@ -128,26 +128,26 @@
     </div>
 
     <!-- 좌측 상단 플로팅 버튼 -->
-    <div class="absolute top-3 left-3 flex flex-col space-y-3 z-[1000]">
-        <button onclick="document.getElementById('gpx-file-input').click()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Load GPX">
-            <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+    <div class="absolute top-3 left-3 flex flex-col space-y-2 z-[1000]">
+        <button onclick="document.getElementById('gpx-file-input').click()" class="w-7 h-7 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Load GPX">
+            <svg class="w-3.5 h-3.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
         </button>
         <input type="file" id="gpx-file-input" multiple class="hidden" onchange="handleFileSelect(event)">
 
-        <button onclick="openLibraryModal()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Library">
-            <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+        <button onclick="openLibraryModal()" class="w-7 h-7 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Library">
+            <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
         </button>
 
-        <button onclick="showAllRoutes()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Show All Route">
-            <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <button onclick="showAllRoutes()" class="w-7 h-7 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Show All Route">
+            <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         </button>
 
-        <button id="locate-btn" onclick="locateMe()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="내 위치" aria-label="내 위치">
-            <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5" stroke-width="2"></circle><path stroke-linecap="round" stroke-width="2" d="M12 2.5v3.5M12 18v3.5M2.5 12H6m12 0h3.5"></path><circle cx="12" cy="12" r="7.5" stroke-width="2"></circle></svg>
+        <button id="locate-btn" onclick="locateMe()" class="w-7 h-7 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="내 위치" aria-label="내 위치">
+            <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5" stroke-width="2"></circle><path stroke-linecap="round" stroke-width="2" d="M12 2.5v3.5M12 18v3.5M2.5 12H6m12 0h3.5"></path><circle cx="12" cy="12" r="7.5" stroke-width="2"></circle></svg>
         </button>
 
-        <button id="photo-btn" onclick="togglePhotos()" class="hidden w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="지도 사진 켜기/끄기" aria-label="지도 사진">
-            <svg class="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"></path><circle cx="12" cy="13" r="3.5" stroke-width="2"></circle></svg>
+        <button id="photo-btn" onclick="togglePhotos()" class="hidden w-7 h-7 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="지도 사진 켜기/끄기" aria-label="지도 사진">
+            <svg class="w-3.5 h-3.5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"></path><circle cx="12" cy="13" r="3.5" stroke-width="2"></circle></svg>
         </button>
     </div>
 
@@ -165,27 +165,27 @@
     </div>
 
     <!-- 우측 상단 플로팅 버튼 컨테이너 -->
-    <div id="top-right-wrapper" class="absolute top-3 right-3 z-[1000] flex flex-col gap-3">
-        <div id="top-right-controls" class="hidden flex-col space-y-3">
-        <button onclick="openDetailModal()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Detail Info">
-            <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+    <div id="top-right-wrapper" class="absolute top-3 right-3 z-[1000] flex flex-col gap-2">
+        <div id="top-right-controls" class="hidden flex-col space-y-2">
+        <button onclick="openDetailModal()" class="w-7 h-7 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Detail Info">
+            <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
         </button>
-        <button onclick="openWaypointModal()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Way Point 추가">
-            <svg class="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21c-4.477-7-8-10.5-8-13A8 8 0 1120 8c0 2.5-3.523 6-8 13z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10h6m-3-3v6"></path></svg>
+        <button onclick="openWaypointModal()" class="w-7 h-7 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Way Point 추가">
+            <svg class="w-3.5 h-3.5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21c-4.477-7-8-10.5-8-13A8 8 0 1120 8c0 2.5-3.523 6-8 13z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10h6m-3-3v6"></path></svg>
         </button>
         </div>
 
         <!-- 지도 확대/축소 버튼 -->
-        <div id="zoom-controls" class="flex flex-col space-y-3 relative">
-            <button onclick="zoomByButton(1)" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Zoom In">
-                <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14m-7-7h14"></path></svg>
+        <div id="zoom-controls" class="flex flex-col space-y-2 relative">
+            <button onclick="zoomByButton(1)" class="w-7 h-7 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Zoom In">
+                <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14m-7-7h14"></path></svg>
             </button>
-            <button onclick="zoomByButton(-1)" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Zoom Out">
-                <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14"></path></svg>
+            <button onclick="zoomByButton(-1)" class="w-7 h-7 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Zoom Out">
+                <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14"></path></svg>
             </button>
-            <div id="zoom-level-bubble" class="absolute right-12 top-1 min-w-[2.25rem] text-center px-3 py-1.5 rounded-full bg-gray-900/55 text-white text-base font-bold border border-sky-400/50 shadow-lg whitespace-nowrap pointer-events-none transition-opacity duration-300 opacity-0 backdrop-blur-sm" style="margin:0"></div>
-            <button onclick="cycleBaseMap()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="지도 종류 바꾸기">
-                <svg class="w-5 h-5 text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l9 5-9 5-9-5 9-5zm-9 9l9 5 9-5m-18 4l9 5 9-5"></path></svg>
+            <div id="zoom-level-bubble" class="absolute right-9 -top-1 min-w-[2.25rem] text-center px-3 py-1.5 rounded-full bg-gray-900/55 text-white text-base font-bold border border-sky-400/50 shadow-lg whitespace-nowrap pointer-events-none transition-opacity duration-300 opacity-0 backdrop-blur-sm" style="margin:0"></div>
+            <button onclick="cycleBaseMap()" class="w-7 h-7 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="지도 종류 바꾸기">
+                <svg class="w-3.5 h-3.5 text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l9 5-9 5-9-5 9-5zm-9 9l9 5 9-5m-18 4l9 5 9-5"></path></svg>
             </button>
         </div>
     </div>
@@ -397,7 +397,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.3.1';
+        const APP_VERSION = 'v0.3.2';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
