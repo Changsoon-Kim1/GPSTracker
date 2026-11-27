@@ -356,7 +356,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.1.56';
+        const APP_VERSION = 'v0.1.57';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1305,24 +1305,31 @@
                 `nwr["tourism"~"^(alpine_hut|wilderness_hut)$"]["name"](${bb});` +
                 `nwr["amenity"="shelter"]["name"]["shelter_type"!~"public_transport"](${bb});` +
                 `);out center tags;`;
-            let lastErr = null;
-            for (const url of OVERPASS_URLS) {
+            // 서버 여러 곳에 동시에 묻고 먼저 성공한 답을 쓴다 (공용 서버라 한 곳이 바쁘거나 막혀 있을 수 있음)
+            const errs = [];
+            const one = async (url) => {
                 const ctl = new AbortController();
-                const timer = setTimeout(() => ctl.abort(), 30000);
+                const timer = setTimeout(() => ctl.abort(), 25000);
+                const host = url.replace(/^https:\/\/([^/]+).*/, '$1');
                 try {
-                    const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctl.signal });
+                    const res = await fetch(url + '?data=' + encodeURIComponent(q), { signal: ctl.signal });
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     const j = await res.json();
-                    clearTimeout(timer);
                     return (j.elements || []).map((el) => {
                         const t = el.tags || {}, k = placeKindOf(t);
                         const lat = el.lat != null ? el.lat : el.center && el.center.lat, lon = el.lon != null ? el.lon : el.center && el.center.lon;
                         const ele = parseFloat(String(t.ele || '').replace(',', '.'));
-                        return k && lat != null ? { n: t['name:ko'] || t.name, k, e: isFinite(ele) ? Math.round(ele) : null, lat: +lat.toFixed(6), lon: +lon.toFixed(6) } : null;
+                        return k && lat != null && lon != null ? { n: t['name:ko'] || t.name, k, e: isFinite(ele) ? Math.round(ele) : null, lat: +(+lat).toFixed(6), lon: +(+lon).toFixed(6) } : null;
                     }).filter(Boolean);
-                } catch (err) { clearTimeout(timer); lastErr = err; }
-            }
-            throw lastErr || new Error('지명 서버 응답 없음');
+                } catch (err) {
+                    const msg = err && err.name === 'AbortError' ? '시간 초과' : (err && err.message || String(err));
+                    errs.push(host + ': ' + msg);
+                    console.warn('[places]', host, msg);
+                    throw err;
+                } finally { clearTimeout(timer); }
+            };
+            try { return await Promise.any(OVERPASS_URLS.map(one)); }
+            catch (e) { throw new Error(errs.join(' / ') || '지명 서버 응답 없음'); }
         }
         // 지명마다 경로에서 가장 가까운 기록 점을 찾아, PLACE_MATCH_M 안이면 붙인다. 같은 이름이 가까이 겹치면(노드/건물) 하나만.
         function matchPlaces(pts, items) {
@@ -1345,7 +1352,7 @@
         // 경로를 열 때: 저장된 결과 → 없으면 Overpass 에서 받아 저장
         async function loadPlaces(route, force) {
             if (!PLACES_ENABLED || !route || !route.points || route.points.length < 2) return;
-            route._placesState = 'loading'; route._places = null;
+            route._placesState = 'loading'; route._places = null; route._placesErr = '';
             if (currentRouteData === route) renderPlaces();
             let data = force ? null : (route.placesData || null);
             if (!data && !force && route.id) {
@@ -1361,7 +1368,8 @@
                     }
                 } catch (e) {
                     data = null;
-                    if (force) showToast('지명을 불러오지 못했습니다: ' + (e && e.message ? e.message : e));
+                    route._placesErr = e && e.message ? e.message : String(e);
+                    if (force) showToast('지명을 불러오지 못했습니다');
                 }
             }
             route.placesData = data;
@@ -1408,7 +1416,7 @@
             const btn = `<button onclick="reloadPlaces()" class="text-[11px] text-sky-300 hover:text-sky-200 underline">다시 가져오기</button>`;
             let body;
             if (st === 'loading') body = '<div class="text-xs text-gray-500">지명 불러오는 중…</div>';
-            else if (st === 'error') body = '<div class="text-xs text-gray-500">지명을 불러오지 못했습니다.</div>';
+            else if (st === 'error') body = `<div class="text-xs text-gray-500">지명을 불러오지 못했습니다.</div><div class="text-[10px] text-red-300/80 break-words">${placeEsc(route._placesErr || '')}</div>`;
             else if (!route || !route._places || !route._places.length) body = `<div class="text-xs text-gray-500">경로 ${PLACE_MATCH_M} m 안에 지나간 지명이 없습니다.</div>`;
             else body = '<div class="space-y-1">' + route._places.map((p) => {
                 const K = PLACE_KIND[p.k] || PLACE_KIND.peak, pt = route.points[p.i], tm = placeTimeText(p);
