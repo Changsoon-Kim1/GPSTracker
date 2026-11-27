@@ -20,6 +20,8 @@
         .place-mk { position: absolute; left: -6px; top: -9px; display: flex; align-items: center; white-space: nowrap; pointer-events: auto; }
         .place-sym { font-size: 13px; line-height: 1; text-shadow: 0 0 2px #111, 0 0 3px #111; }
         .place-label { margin-left: 3px; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 0 2px #111, 0 0 3px #111, 0 0 4px #111; }
+        .place-near { position: absolute; left: 0; top: -7px; transform: translateX(-50%); white-space: nowrap; font-size: 10px; font-weight: 600; color: #f3f4f6; text-shadow: 0 0 2px #111, 0 0 3px #111, 0 0 3px #111; pointer-events: none; }
+        .places-near-hide .place-near { display: none; }
         .places-hide .place-mk { display: none; }
         .places-nolabel .place-label { display: none; }
         body, html { 
@@ -360,7 +362,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.1.63';
+        const APP_VERSION = 'v0.1.64';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1352,7 +1354,10 @@
         const PLACES_ENABLED = true;
         let graphNoPan = false; // 지명 표시 때문에 그래프를 다시 그릴 때는 지도를 옮기지 않는다
         const PLACE_MATCH_M = 70;
-        const PLACES_VER = 1;
+        const PLACES_VER = 2;
+        const PLACE_NEAR_M = 500;      // 경로에서 이 거리 안의 봉우리는 지도에 이름만 표시 (아이콘은 PLACE_MATCH_M 안만)
+        const PLACE_NEAR_MIN_ZOOM = 13;
+        const PLACE_OTHER_STORE_M = 100; // 봉우리 외 지명(대피소·고개·쉼터)은 이 거리 안의 것만 저장
         const PLACE_KIND = {
             peak:    { sym: '▲', color: '#fbbf24', name: '봉우리' },
             pass:    { sym: '◆', color: '#34d399', name: '고개' },
@@ -1374,7 +1379,7 @@
         async function fetchOverpassPlaces(pts) {
             let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
             for (const p of pts) { if (p.lat < s) s = p.lat; if (p.lat > n) n = p.lat; if (p.lon < w) w = p.lon; if (p.lon > e) e = p.lon; }
-            const m = 0.003; // 약 300m 여유
+            const m = 0.007; // 약 700m 여유 (경로 500m 안의 봉우리까지)
             const bb = `${(s - m).toFixed(5)},${(w - m).toFixed(5)},${(n + m).toFixed(5)},${(e + m).toFixed(5)}`;
             const q = `[out:json][timeout:25];(` +
                 `nwr["natural"~"^(peak|volcano|saddle)$"]["name"](${bb});` +
@@ -1409,24 +1414,36 @@
             catch (e) { throw new Error(errs.join(' / ') || '지명 서버 응답 없음'); }
         }
         // 지명마다 경로에서 가장 가까운 기록 점을 찾아, PLACE_MATCH_M 안이면 붙인다. 같은 이름이 가까이 겹치면(노드/건물) 하나만.
-        function matchPlaces(pts, items) {
-            const cosL = Math.cos(pts[0].lat * Math.PI / 180), M = 111320;
-            const out = [];
+        // 지명마다 경로에서 가장 가까운 기록 점(i)과 거리(d, m)를 구한다
+        function measurePlaces(pts, items) {
+            const cosL = Math.cos(pts[0].lat * Math.PI / 180), M = 111320, out = [];
             for (const it of items) {
                 let best = -1, bd = Infinity;
                 for (let i = 0; i < pts.length; i++) {
                     const dy = (pts[i].lat - it.lat) * M, dx = (pts[i].lon - it.lon) * M * cosL, d = dx * dx + dy * dy;
                     if (d < bd) { bd = d; best = i; }
                 }
-                const d = Math.sqrt(bd);
-                if (best >= 0 && d <= PLACE_MATCH_M) out.push(Object.assign({}, it, { i: best, d: Math.round(d) }));
+                if (best >= 0) out.push(Object.assign({}, it, { i: best, d: Math.round(Math.sqrt(bd)) }));
             }
-            out.sort((a, b) => a.d - b.d);
+            return out;
+        }
+        // 경로 위 표시용: PLACE_MATCH_M 안. 같은 이름이 가까이 겹치면(노드/건물) 하나만.
+        function matchPlaces(pts, items) {
+            const out = measurePlaces(pts, items).filter((p) => p.d <= PLACE_MATCH_M).sort((a, b) => a.d - b.d);
             const kept = [];
             for (const p of out) if (!kept.some((q) => q.n === p.n && Math.abs((pts[q.i].cumDist || 0) - (pts[p.i].cumDist || 0)) < 300)) kept.push(p);
             return kept.sort((a, b) => a.i - b.i);
         }
-        // 경로를 열 때: 저장된 결과 → 없으면 Overpass 에서 받아 저장
+        // 지도에 이름만 표시할 봉우리: 경로에서 PLACE_MATCH_M 밖 ~ PLACE_NEAR_M 안. 이미 아이콘으로 나온 것과 겹치면 뺀다.
+        function nearPeaks(pts, items, matched) {
+            const cand = measurePlaces(pts, items.filter((p) => p.k === 'peak')).filter((p) => p.d > PLACE_MATCH_M && p.d <= PLACE_NEAR_M).sort((a, b) => a.d - b.d);
+            const kept = [];
+            for (const p of cand) {
+                const dup = (list) => list.some((q) => q.n === p.n && Math.hypot((q.lat - p.lat) * 111320, (q.lon - p.lon) * 111320 * Math.cos(p.lat * Math.PI / 180)) < 300);
+                if (!dup(matched) && !dup(kept)) kept.push(p);
+            }
+            return kept;
+        }
         async function loadPlaces(route, force) {
             if (!PLACES_ENABLED || !route || !route.points || route.points.length < 2) return;
             route._placesState = 'loading'; route._places = null; route._placesErr = '';
@@ -1435,13 +1452,19 @@
             if (!data && !force && route.id) {
                 try { const r = await sbFetch(`gpx_tracks?id=eq.${route.id}&select=places`); const rows = await r.json(); data = rows[0] && rows[0].places || null; } catch (e) { data = null; }
             }
-            if (!data || data.v !== PLACES_VER || data.m < PLACE_MATCH_M) { // 저장본이 더 넓은 반경(예: 100m)으로 걸러 둔 것이면 다시 받지 않고 여기서 좁혀서 쓴다
+            const stale = !data || data.v !== PLACES_VER || (data.m || 0) < PLACE_NEAR_M || (data.mo || 0) < PLACE_MATCH_M;
+            if (stale && data && data.items && !force) { // 예전 저장본(100m 이내만)은 일단 그대로 보여 주고, 뒤에서 500m 범위로 새로 받는다
+                route._places = matchPlaces(route.points, data.items); route._nearPeaks = []; route._placesState = 'ok';
+                if (currentRouteData === route) renderPlaces();
+            }
+            if (stale) {
                 try {
                     if (currentRouteData === route) showToast('주요 지명을 불러오는 중… (처음 한 번, 10~30초)');
                     const els = await fetchOverpassPlaces(route.points);
-                    const matched = matchPlaces(route.points, els);
+                    // 봉우리는 경로 500m 안, 그 외(대피소·고개·쉼터)는 100m 안의 것만 저장 (기준 거리를 바꿔도 다시 받을 필요가 없게)
+                    const stored = measurePlaces(route.points, els).filter((p) => p.d <= (p.k === 'peak' ? PLACE_NEAR_M : PLACE_OTHER_STORE_M));
                     fetched = true;
-                    data = { v: PLACES_VER, m: PLACE_MATCH_M, at: Date.now(), items: matched.map((p) => ({ n: p.n, k: p.k, e: p.e, lat: p.lat, lon: p.lon })) };
+                    data = { v: PLACES_VER, m: PLACE_NEAR_M, mo: PLACE_OTHER_STORE_M, at: Date.now(), items: stored.map((p) => ({ n: p.n, k: p.k, e: p.e, lat: p.lat, lon: p.lon, d: p.d })) };
                     if (route.id) {
                         try { await sbFetch(`gpx_tracks?id=eq.${route.id}`, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ places: data }) }); } catch (e) { /* 저장 실패해도 화면 표시는 한다 */ }
                     }
@@ -1452,16 +1475,18 @@
                 }
             }
             route.placesData = data;
-            route._places = data ? matchPlaces(route.points, data.items) : [];
-            route._placesState = data ? 'ok' : 'error';
+            route._places = data ? matchPlaces(route.points, data.items) : (route._places || []);
+            route._nearPeaks = data ? nearPeaks(route.points, data.items, route._places) : [];
+            route._placesState = data || (route._places && route._places.length) ? 'ok' : 'error';
             if (currentRouteData === route) {
                 renderPlaces();
-                if (fetched) showToast(route._places.length ? `주요 지명 ${route._places.length}곳을 표시했습니다` : '경로 100 m 안에 지나간 지명이 없습니다');
+                if (fetched) showToast(route._places.length ? `주요 지명 ${route._places.length}곳을 표시했습니다` : `경로 ${PLACE_MATCH_M} m 안에 지나간 지명이 없습니다`);
                 else if (data === null && !force) showToast('지명을 불러오지 못했습니다 (상세 화면에서 원인 확인)');
             }
         }
         function reloadPlaces() { if (currentRouteData) loadPlaces(currentRouteData, true); }
-        function clearPlaces() { placeLayerGroup.clearLayers(); }
+        const placeNearLayerGroup = L.layerGroup().addTo(map);
+        function clearPlaces() { placeLayerGroup.clearLayers(); placeNearLayerGroup.clearLayers(); }
         function placeTimeText(p) { const t = currentRouteData && currentRouteData.points[p.i].time; return t ? formatClock(t) : ''; }
         function renderPlaces() {
             clearPlaces();
@@ -1480,6 +1505,12 @@
                         `<span style="color:#6b7280">경로에서 ${p.d} m · OpenStreetMap</span></div>`)
                     .addTo(placeLayerGroup);
             });
+            ((route && route._nearPeaks) || []).forEach((p) => { // 경로 근처(70m 밖~500m) 봉우리: 이름만
+                L.marker([p.lat, p.lon], {
+                    interactive: false, keyboard: false, zIndexOffset: 300,
+                    icon: L.divIcon({ className: 'bg-transparent border-none', iconSize: [0, 0], iconAnchor: [0, 0], html: `<div class="place-near">${placeEsc(p.n)}</div>` })
+                }).addTo(placeNearLayerGroup);
+            });
             updatePlaceVisibility();
             renderDetailPlaces();
             if (route) { graphNoPan = true; try { drawGraph(currentScrubDist); } finally { graphNoPan = false; } }
@@ -1488,6 +1519,7 @@
             const z = map.getZoom(), c = map.getContainer();
             c.classList.toggle('places-hide', z < PLACE_ICON_MIN_ZOOM);
             c.classList.toggle('places-nolabel', z < PLACE_LABEL_MIN_ZOOM);
+            c.classList.toggle('places-near-hide', z < PLACE_NEAR_MIN_ZOOM);
         }
         map.on('zoomend', updatePlaceVisibility);
         // 경로 상세 통계의 "지나간 곳" 목록
