@@ -122,6 +122,10 @@
         <button onclick="showAllRoutes()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="Show All Route">
             <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         </button>
+
+        <button id="locate-btn" onclick="locateMe()" class="w-10 h-10 bg-gray-900/90 hover:bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center border border-gray-700 backdrop-blur-sm active:scale-95 transition" title="내 위치" aria-label="내 위치">
+            <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5" stroke-width="2"></circle><path stroke-linecap="round" stroke-width="2" d="M12 2.5v3.5M12 18v3.5M2.5 12H6m12 0h3.5"></path><circle cx="12" cy="12" r="7.5" stroke-width="2"></circle></svg>
+        </button>
     </div>
 
     <!-- 우측 상단 플로팅 버튼 컨테이너 -->
@@ -356,7 +360,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.1.60';
+        const APP_VERSION = 'v0.1.61';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -598,6 +602,79 @@
                 if (Date.now() - lastZoomGestureAt < 1500) showZoomBubble(map.getZoom());
             });
         })();
+
+
+        // ===== 내 위치 (LOCATE): 버튼을 누르면 현재 위치로 이동하고 파란 점으로 표시. 켜 두는 동안 위치가 따라 움직인다 =====
+        let locWatchId = null, locMarker = null, locCircle = null, locLast = null, locCenterNext = false;
+        function locDistToRoute(lat, lon) {
+            const pts = currentRouteData && currentRouteData.points;
+            if (!pts || !pts.length) return null;
+            const cosL = Math.cos(lat * Math.PI / 180), M = 111320;
+            let bd = Infinity;
+            for (let i = 0; i < pts.length; i += 2) { const dy = (pts[i].lat - lat) * M, dx = (pts[i].lon - lon) * M * cosL, d = dx * dx + dy * dy; if (d < bd) bd = d; }
+            return Math.sqrt(bd);
+        }
+        function locPopupHtml() {
+            if (!locLast) return '';
+            const dr = locDistToRoute(locLast.lat, locLast.lon);
+            const drText = dr == null ? '' : (dr < 1000 ? `경로까지 약 ${Math.round(dr)} m` : `경로까지 약 ${(dr / 1000).toFixed(1)} km`) + '<br>';
+            return `<div style="font-size:12px;line-height:1.5"><b>내 위치</b><br>정확도 ±${Math.round(locLast.acc)} m<br>${drText}` +
+                `<a href="#" onclick="stopLocate();return false;" style="color:#2563eb">위치 표시 끄기</a></div>`;
+        }
+        function locUpdate(pos, center) {
+            const lat = pos.coords.latitude, lon = pos.coords.longitude, acc = pos.coords.accuracy || 0;
+            locLast = { lat, lon, acc };
+            if (!locMarker) {
+                locMarker = L.marker([lat, lon], {
+                    zIndexOffset: 2000,
+                    icon: L.divIcon({ className: 'bg-transparent border-none', iconSize: [0, 0], iconAnchor: [0, 0],
+                        html: '<div style="position:absolute;left:-9px;top:-9px;width:18px;height:18px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 2px rgba(37,99,235,.35),0 1px 6px rgba(0,0,0,.6)"></div>' })
+                }).addTo(map);
+                locMarker.bindPopup(() => locPopupHtml());
+                locCircle = L.circle([lat, lon], { radius: Math.max(acc, 5), color: '#2563eb', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.12, interactive: false }).addTo(map);
+            } else {
+                locMarker.setLatLng([lat, lon]);
+                locCircle.setLatLng([lat, lon]); locCircle.setRadius(Math.max(acc, 5));
+            }
+            if (center) map.setView([lat, lon], Math.max(map.getZoom(), 16), { animate: true });
+        }
+        function locateMe() {
+            if (!navigator.geolocation) { showToast('이 브라우저는 위치 기능을 지원하지 않습니다.'); return; }
+            const btn = document.getElementById('locate-btn');
+            if (locWatchId !== null && locLast) { // 이미 켜져 있으면 현재 위치로 다시 이동
+                map.setView([locLast.lat, locLast.lon], Math.max(map.getZoom(), 16), { animate: true });
+                if (locMarker) locMarker.openPopup();
+                return;
+            }
+            showToast('현재 위치를 찾는 중…');
+            btn.classList.add('ring-2', 'ring-sky-400');
+            locCenterNext = true;
+            if (locWatchId !== null) navigator.geolocation.clearWatch(locWatchId);
+            locWatchId = navigator.geolocation.watchPosition((pos) => {
+                const first = locCenterNext; locCenterNext = false;
+                locUpdate(pos, first);
+                if (first && locMarker) locMarker.openPopup();
+            }, (err) => {
+                showToast(err && err.code === 1 ? '위치 권한이 꺼져 있습니다. 브라우저 설정에서 허용해 주세요.' : (err && err.code === 3 ? '위치를 찾지 못했습니다. (시간 초과)' : '위치를 가져오지 못했습니다.'));
+                if (!locLast) stopLocate();
+            }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+        }
+        function stopLocate() {
+            if (locWatchId !== null) navigator.geolocation.clearWatch(locWatchId);
+            locWatchId = null; locLast = null;
+            if (locMarker) { map.removeLayer(locMarker); locMarker = null; }
+            if (locCircle) { map.removeLayer(locCircle); locCircle = null; }
+            const btn = document.getElementById('locate-btn'); if (btn) btn.classList.remove('ring-2', 'ring-sky-400');
+            map.closePopup();
+        }
+        // 화면이 꺼지거나 다른 앱으로 가면 브라우저가 위치 갱신을 멈추므로, 돌아왔을 때 다시 이어 받는다
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && locWatchId !== null) {
+                navigator.geolocation.clearWatch(locWatchId);
+                locWatchId = navigator.geolocation.watchPosition((pos) => locUpdate(pos, false), () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+            }
+        });
+        // ===== LOCATE END =====
 
         function showToast(msg) {
             const toast = document.getElementById('toast');
