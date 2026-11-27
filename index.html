@@ -356,7 +356,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.1.57';
+        const APP_VERSION = 'v0.1.58';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1354,14 +1354,16 @@
             if (!PLACES_ENABLED || !route || !route.points || route.points.length < 2) return;
             route._placesState = 'loading'; route._places = null; route._placesErr = '';
             if (currentRouteData === route) renderPlaces();
-            let data = force ? null : (route.placesData || null);
+            let data = force ? null : (route.placesData || null), fetched = false;
             if (!data && !force && route.id) {
                 try { const r = await sbFetch(`gpx_tracks?id=eq.${route.id}&select=places`); const rows = await r.json(); data = rows[0] && rows[0].places || null; } catch (e) { data = null; }
             }
             if (!data || data.v !== PLACES_VER || data.m !== PLACE_MATCH_M) {
                 try {
+                    if (currentRouteData === route) showToast('주요 지명을 불러오는 중… (처음 한 번, 10~30초)');
                     const els = await fetchOverpassPlaces(route.points);
                     const matched = matchPlaces(route.points, els);
+                    fetched = true;
                     data = { v: PLACES_VER, m: PLACE_MATCH_M, at: Date.now(), items: matched.map((p) => ({ n: p.n, k: p.k, e: p.e, lat: p.lat, lon: p.lon })) };
                     if (route.id) {
                         try { await sbFetch(`gpx_tracks?id=eq.${route.id}`, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ places: data }) }); } catch (e) { /* 저장 실패해도 화면 표시는 한다 */ }
@@ -1375,7 +1377,11 @@
             route.placesData = data;
             route._places = data ? matchPlaces(route.points, data.items) : [];
             route._placesState = data ? 'ok' : 'error';
-            if (currentRouteData === route) renderPlaces();
+            if (currentRouteData === route) {
+                renderPlaces();
+                if (fetched) showToast(route._places.length ? `주요 지명 ${route._places.length}곳을 표시했습니다` : '경로 100 m 안에 지나간 지명이 없습니다');
+                else if (data === null && !force) showToast('지명을 불러오지 못했습니다 (상세 화면에서 원인 확인)');
+            }
         }
         function reloadPlaces() { if (currentRouteData) loadPlaces(currentRouteData, true); }
         function clearPlaces() { placeLayerGroup.clearLayers(); }
