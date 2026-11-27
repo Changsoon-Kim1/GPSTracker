@@ -397,7 +397,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.3.5';
+        const APP_VERSION = 'v0.3.6';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -3260,7 +3260,7 @@
               cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
               if (bmp.close) bmp.close();
               return { url: cv.toDataURL('image/jpeg', q), w: cv.width, h: cv.height };
-            } catch (e) { return null; }
+            } catch (e) { thumb.lastErr = (e && e.message) || String(e); return null; }
           }
 
           // 사진마다 시각·위치를 정리하고 기록과 맞춘다
@@ -3608,7 +3608,7 @@
             });
             const uniq = warns.filter((w, i) => warns.indexOf(w) === i);
             const imgs = c.photos.map((p) => '<div class="it" style="--a:' + (p.thumb ? (p.thumb.w / p.thumb.h).toFixed(3) : '1.333') + '">' +
-              (p.thumb ? '<img data-pid="' + p.pid + '" alt="장면 ' + c.n + ' 사진" src="' + p.thumb.url + '">' : '<div class="noimg muted">미리보기 없음<br>' + esc(p.name) + '</div>') + '</div>').join('');
+              (p.thumb ? '<img data-pid="' + p.pid + '" alt="장면 ' + c.n + ' 사진" src="' + p.thumb.url + '">' : '<div class="noimg muted">미리보기 없음<br>' + esc(p.name) + (p.bad ? '<br><span class="warn">' + esc(p.bad) + '</span>' : '') + '</div>') + '</div>').join('');
             return '<section class="chap"><div class="chead">' + (c.loc ? '<div class="cmap">' + miniSVG(track, chapters, c, pr, hasBg) + '</div>' : '') +
               '<div class="cinfo"><div class="ctitle"><span class="no">' + c.n + '</span><b>' + esc(when) + '</b></div>' + meta +
               uniq.map((w) => '<div class="warn">' + esc(w) + '</div>').join('') + '</div></div>' +
@@ -3693,9 +3693,23 @@
               for (let i = 0; i < files.length; i++) {
                 prog.textContent = '사진 ' + (i + 1) + '/' + files.length + ' 읽는 중…';
                 const f = files[i];
-                const info = X.describe(await readExif(f), f.name, f.lastModified, tzMin);
-                const ph = Object.assign({ name: f.name }, info);
-                ph.thumb = await thumb(f, Q.side, Q.q); ph.pid = i; ph.file = f; photoFiles[i] = f;
+                // 파일 앞부분을 먼저 읽어 본다: 못 읽으면(클라우드에만 있는 사진 등) 시간·위치도 믿을 수 없으므로 '시간 모름'으로 둔다
+                let bad = null;
+                try {
+                  const h = new Uint8Array(await f.slice(0, 32).arrayBuffer());
+                  const brand = String.fromCharCode(...h.slice(4, 12));
+                  if (!h.length) bad = '빈 파일(휴대폰에 내려받지 않은 사진일 수 있어요)';
+                  else if (brand.startsWith('ftyp') && /hei[cx]|mif1|msf1|hevc/.test(brand)) bad = 'HEIC 형식이라 브라우저에서 열 수 없어요';
+                } catch (e) { bad = '파일을 읽을 수 없어요(클라우드에만 있는 사진일 수 있어요)'; }
+                let ph;
+                if (bad) ph = { name: f.name, t: null, timeFrom: null, lat: null, lon: null, alt: null, orientation: 1, thumb: null };
+                else {
+                  ph = Object.assign({ name: f.name }, X.describe(await readExif(f), f.name, f.lastModified, tzMin));
+                  thumb.lastErr = '';
+                  ph.thumb = await thumb(f, Q.side, Q.q);
+                  if (!ph.thumb) bad = '이미지를 열 수 없어요' + (thumb.lastErr ? ' (' + thumb.lastErr + ')' : '');
+                }
+                ph.bad = bad; ph.pid = i; ph.file = bad ? null : f; if (!bad) photoFiles[i] = f;
                 photos.push(ph);
               }
               photos.forEach((p) => place(p, track, shiftSec));
@@ -3723,6 +3737,8 @@
               $('al-doSave').onclick = () => saveHtml(title);
               $('al-doShare').onclick = () => prepareShare();
               const located = photos.filter((p) => p.loc.how !== 'none').length;
+              const badN = photos.filter((p) => p.bad).length;
+              if (badN) { err.textContent = '사진 ' + badN + '장은 읽지 못했어요. 클라우드에만 있는 사진이거나 HEIC 형식일 수 있어요. 갤러리에서 휴대폰에 내려받은 뒤(또는 JPG로 저장한 뒤) "내 파일"에서 다시 골라 주세요.'; err.hidden = false; }
               prog.textContent = '완료: 사진 ' + photos.length + '장 중 위치 확인 ' + located + '장 (사진 GPS ' + photos.filter((p) => p.loc.how === 'photo').length + ' · GPX 맞춤 ' + photos.filter((p) => p.loc.how === 'track' || p.loc.how === 'edge').length + ')';
               $('al-out').scrollIntoView({ behavior: 'smooth', block: 'start' });
               // 지도에 사진 아이콘을 띄우기 위해 줄인 사진을 이 기기(IndexedDB)에 저장 (서버로 올리지 않음)
@@ -3734,6 +3750,7 @@
                   if (r.noLoc) msg += ' (위치 모름 ' + r.noLoc + '장 제외)';
                   if (r.fail) msg += ' (읽기 실패 ' + r.fail + '장: ' + r.err + ')';
                   prog.textContent = doneText + msg;
+                  showToast(r.n ? '지도 사진 ' + r.n + '장을 저장했습니다' : '지도에 올릴 사진이 없습니다');
                   if (!r.n) { err.textContent = '지도에 올릴 사진이 없어 카메라 버튼이 생기지 않았어요.' + (r.noLoc ? ' 위치를 확인한 사진이 없어요.' : '') + (r.fail ? ' 사진 변환 실패: ' + r.err : '') + (r.err && !r.fail ? ' ' + r.err : ''); err.hidden = false; }
                 } catch (e) { prog.textContent = doneText + ' · 지도 사진 저장 실패(' + (e && e.message || e) + ')'; }
               }
