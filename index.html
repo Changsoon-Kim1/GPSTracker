@@ -221,6 +221,7 @@
                 <h3 class="font-bold text-lg text-white">경로 상세 통계</h3>
                 <button onclick="closeDetailModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
             </div>
+            <div id="detail-name" class="px-5 py-2 text-sm font-semibold text-blue-300 border-b border-gray-800 break-words shrink-0"></div>
             <div id="detail-content" class="p-5 space-y-3 text-sm overflow-y-auto min-h-0"></div>
         </div>
     </div>
@@ -368,7 +369,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.2.2';
+        const APP_VERSION = 'v0.2.3';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -2547,6 +2548,7 @@
                 return `${sign}${pt.gradient.toFixed(1)}%`;
             };
             
+            document.getElementById('detail-name').textContent = currentRouteData.name || '';
             document.getElementById('detail-content').innerHTML = `
                 <div class="flex justify-between items-start border-b border-gray-800 pb-2"><span class="text-gray-400">일시</span><span class="text-white text-right leading-snug">${formatTrackPeriod(pts)}</span></div>
                 <div class="flex justify-between border-b border-gray-800 pb-2"><span class="text-gray-400">거리</span><span class="text-white">${dKm.toFixed(2)} km</span></div>
