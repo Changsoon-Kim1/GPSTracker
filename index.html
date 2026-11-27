@@ -366,7 +366,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.1.65';
+        const APP_VERSION = 'v0.1.66';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1354,14 +1354,12 @@
         // ===== PLACES BEGIN — 주요 지명(봉우리·대피소·고개)을 경로에 표시 =====
         // 되돌리기: PLACES_ENABLED = false 로 끄거나, GitHub 브랜치 before-places(v0.1.55)로 되돌린다.
         // 데이터: OpenStreetMap(Overpass API). 경로에서 PLACE_MATCH_M 안에 있는 지명만, 가장 가까운 기록 점에 붙인다.
-        // 한 번 받은 결과는 gpx_tracks.places 에 저장해 두고 다시 쓴다.
+        // 받은 지명은 공용 저장소(gpx_places, gpx_place_cells)에 모아 여러 경로가 함께 쓴다. (gpx_tracks.places 는 예전 방식, 받는 동안 임시로만 사용)
         const PLACES_ENABLED = true;
         let graphNoPan = false; // 지명 표시 때문에 그래프를 다시 그릴 때는 지도를 옮기지 않는다
         const PLACE_MATCH_M = 70;
-        const PLACES_VER = 2;
         const PLACE_NEAR_M = 500;      // 경로에서 이 거리 안의 봉우리는 지도에 이름만 표시 (아이콘은 PLACE_MATCH_M 안만)
         const PLACE_NEAR_MIN_ZOOM = 13;
-        const PLACE_OTHER_STORE_M = 100; // 봉우리 외 지명(대피소·고개·쉼터)은 이 거리 안의 것만 저장
         const PLACE_KIND = {
             peak:    { sym: '▲', color: '#fbbf24', name: '봉우리' },
             pass:    { sym: '◆', color: '#34d399', name: '고개' },
@@ -1380,33 +1378,62 @@
             if (tags.amenity === 'shelter') return 'shelter';
             return null;
         }
-        // 경로를 약 250m 간격의 점으로 줄여서, 구간(약 9km)별로 "경로에서 520m 이내"만 묻는다.
-        // (경로 전체를 감싸는 직사각형으로 묻으면 긴 종주 경로에서 서버가 시간 안에 못 끝낼 수 있다)
-        function placeQueryChunks(pts) {
-            const simp = [];
+        // ---- 지명 공용 저장소 (gpx_places + gpx_place_cells) ----
+        // 지명은 경로마다 따로 받지 않고 한 저장소에 모은다. 지역을 약 1.1km 격자 칸으로 나눠, 이미 받은 칸은 다시 묻지 않는다.
+        // 그래서 같은 지역을 지나는 다른 경로는 서버(Overpass)에 묻지 않고 바로 지명이 나온다.
+        const CELL_LAT = 0.01, CELL_LON = 0.0125, PLACE_BUF_M = 520;
+        function cellBounds(k) { const [a, b] = k.split('_').map(Number); return { s: a * CELL_LAT, n: (a + 1) * CELL_LAT, w: b * CELL_LON, e: (b + 1) * CELL_LON }; }
+        // 경로에서 PLACE_BUF_M 안에 걸치는 칸들 (경로 순서)
+        function routeCells(pts) {
+            const out = new Map();
             let lastD = -1e9;
             for (let i = 0; i < pts.length; i++) {
-                const d = pts[i].cumDist || 0;
-                if (i === 0 || i === pts.length - 1 || d - lastD >= 250) { simp.push(pts[i]); lastD = d; }
+                const p = pts[i], d = p.cumDist || 0;
+                if (i > 0 && i < pts.length - 1 && d - lastD < 100) continue;
+                lastD = d;
+                const dLat = PLACE_BUF_M / 111320, dLon = PLACE_BUF_M / (111320 * Math.cos(p.lat * Math.PI / 180));
+                for (let a = Math.floor((p.lat - dLat) / CELL_LAT); a <= Math.floor((p.lat + dLat) / CELL_LAT); a++)
+                    for (let b = Math.floor((p.lon - dLon) / CELL_LON); b <= Math.floor((p.lon + dLon) / CELL_LON); b++) {
+                        const k = a + '_' + b; if (!out.has(k)) out.set(k, true);
+                    }
             }
-            const CH = 36, chunks = [];
-            for (let i = 0; i < simp.length - 1 || i === 0; i += CH - 1) {
-                const part = simp.slice(i, i + CH);
-                if (part.length) chunks.push(part);
-                if (i + CH >= simp.length) break;
-            }
-            return chunks;
+            return [...out.keys()];
         }
-        async function fetchOverpassChunk(part) {
-            const coords = part.map((p) => p.lat.toFixed(4) + ',' + p.lon.toFixed(4)).join(',');
-            const ar = `(around:520,${coords})`;
+        async function storeGetCells(keys) {
+            const have = new Set();
+            for (let i = 0; i < keys.length; i += 150) {
+                const part = keys.slice(i, i + 150).map((k) => `"${k}"`).join(',');
+                const r = await sbFetch(`gpx_place_cells?select=cell&cell=in.(${part})`);
+                (await r.json()).forEach((row) => have.add(row.cell));
+            }
+            return have;
+        }
+        async function storeGetPlaces(pts) {
+            let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+            for (const p of pts) { if (p.lat < s) s = p.lat; if (p.lat > n) n = p.lat; if (p.lon < w) w = p.lon; if (p.lon > e) e = p.lon; }
+            const m = 0.007;
+            const r = await sbFetch(`gpx_places?select=osm_key,name,kind,ele,lat,lon&lat=gte.${(s - m).toFixed(5)}&lat=lte.${(n + m).toFixed(5)}&lon=gte.${(w - m).toFixed(5)}&lon=lte.${(e + m).toFixed(5)}&limit=5000`);
+            return (await r.json()).map((x) => ({ key: x.osm_key, n: x.name, k: x.kind, e: x.ele, lat: Number(x.lat), lon: Number(x.lon) }));
+        }
+        async function storeSave(items, cells) {
+            const ses = await getFreshSession(), now = Date.now();
+            for (let i = 0; i < items.length; i += 200) {
+                const rows = items.slice(i, i + 200).map((it) => ({ user_id: ses.user_id, osm_key: it.key, name: it.n, kind: it.k, ele: it.e, lat: it.lat, lon: it.lon, updated_at: now }));
+                await sbFetch('gpx_places?on_conflict=user_id,osm_key', { method: 'POST', headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(rows) });
+            }
+            for (let i = 0; i < cells.length; i += 300) {
+                const rows = cells.slice(i, i + 300).map((c) => ({ user_id: ses.user_id, cell: c, fetched_at: now }));
+                await sbFetch('gpx_place_cells?on_conflict=user_id,cell', { method: 'POST', headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(rows) });
+            }
+        }
+        // 한 직사각형(bb = "s,w,n,e") 안의 지명을 Overpass 서버 여러 곳에 동시에 묻고 먼저 성공한 답을 쓴다
+        async function fetchOverpassBox(bb) {
             const q = `[out:json][timeout:25];(` +
-                `nwr["natural"~"^(peak|volcano|saddle)$"]["name"]${ar};` +
-                `nwr["mountain_pass"="yes"]["name"]${ar};` +
-                `nwr["tourism"~"^(alpine_hut|wilderness_hut)$"]["name"]${ar};` +
-                `nwr["amenity"="shelter"]["name"]["shelter_type"!~"public_transport"]${ar};` +
+                `nwr["natural"~"^(peak|volcano|saddle)$"]["name"](${bb});` +
+                `nwr["mountain_pass"="yes"]["name"](${bb});` +
+                `nwr["tourism"~"^(alpine_hut|wilderness_hut)$"]["name"](${bb});` +
+                `nwr["amenity"="shelter"]["name"]["shelter_type"!~"public_transport"](${bb});` +
                 `);out center tags;`;
-            // 서버 여러 곳에 동시에 묻고 먼저 성공한 답을 쓴다 (공용 서버라 한 곳이 바쁘거나 막혀 있을 수 있음)
             const errs = [];
             const one = async (url) => {
                 const ctl = new AbortController();
@@ -1432,22 +1459,34 @@
             try { return await Promise.any(OVERPASS_URLS.map(one)); }
             catch (e) { throw new Error(errs.join(' / ') || '지명 서버 응답 없음'); }
         }
-        // 구간을 2개씩 동시에 묻는다. 일부 구간만 실패해도 받은 것은 쓰고, 실패한 구간 수를 알려 준다.
-        async function fetchOverpassPlaces(pts) {
-            const chunks = placeQueryChunks(pts);
-            const seen = new Map(), errs = [];
-            let next = 0, failed = 0;
+        // 아직 안 받은 칸들을 경로 순서대로 8칸씩 묶어 그 범위를 묻고, 받은 지명과 칸을 저장소에 넣는다
+        async function fillCells(missing) {
+            const groups = [];
+            for (let i = 0; i < missing.length; i += 8) groups.push(missing.slice(i, i + 8));
+            const got = [], errs = [];
+            let next = 0, failed = 0, saveErr = '';
             const worker = async () => {
-                while (next < chunks.length) {
-                    const part = chunks[next++];
-                    try { (await fetchOverpassChunk(part)).forEach((it) => { if (!seen.has(it.key)) seen.set(it.key, it); }); }
-                    catch (e) { failed++; errs.push(e && e.message ? e.message : String(e)); }
+                while (next < groups.length) {
+                    const g = groups[next++];
+                    let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+                    g.forEach((k) => { const c = cellBounds(k); s = Math.min(s, c.s); w = Math.min(w, c.w); n = Math.max(n, c.n); e = Math.max(e, c.e); });
+                    try {
+                        const items = await fetchOverpassBox(`${s.toFixed(4)},${w.toFixed(4)},${n.toFixed(4)},${e.toFixed(4)}`);
+                        got.push(...items);
+                        // 묻은 직사각형 안의 칸은 모두 받은 것으로 기록
+                        const cells = [];
+                        for (let a = Math.round(s / CELL_LAT); a < Math.round(n / CELL_LAT); a++) for (let b = Math.round(w / CELL_LON); b < Math.round(e / CELL_LON); b++) cells.push(a + '_' + b);
+                        try { await storeSave(items, cells); } catch (er) { saveErr = er && er.message ? er.message : String(er); }
+                    } catch (er) { failed++; errs.push(er && er.message ? er.message : String(er)); }
                 }
             };
             await Promise.all([worker(), worker()]);
-            if (failed === chunks.length) throw new Error(errs[0] || '지명 서버 응답 없음');
-            const items = [...seen.values()].map((it) => { const o = Object.assign({}, it); delete o.key; return o; });
-            return { items, failed, total: chunks.length, err: errs[0] || '' };
+            return { items: got, failed, total: groups.length, err: errs[0] || '', saveErr };
+        }
+        function dedupeItems(list) {
+            const seen = new Map();
+            list.forEach((it) => { const k = it.key || (it.n + '|' + it.lat.toFixed(4) + '|' + it.lon.toFixed(4)); if (!seen.has(k)) seen.set(k, it); });
+            return [...seen.values()];
         }
         // 지명마다 경로에서 가장 가까운 기록 점(i)과 거리(d, m)를 구한다
         function measurePlaces(pts, items) {
@@ -1479,49 +1518,48 @@
             }
             return kept;
         }
+        // 경로를 열 때: 저장소에서 바로 꺼내 보여 주고, 아직 안 받은 지역(칸)만 서버에서 받아 채운다
         async function loadPlaces(route, force) {
             if (!PLACES_ENABLED || !route || !route.points || route.points.length < 2) return;
-            route._placesState = 'loading'; route._places = null; route._placesErr = '';
+            route._placesState = 'loading'; route._places = null; route._nearPeaks = []; route._placesErr = '';
             if (currentRouteData === route) renderPlaces();
-            let data = force ? null : (route.placesData || null), fetched = false, partial = false;
-            if (!data && !force && route.id) {
-                try { const r = await sbFetch(`gpx_tracks?id=eq.${route.id}&select=places`); const rows = await r.json(); data = rows[0] && rows[0].places || null; } catch (e) { data = null; }
-            }
-            const stale = !data || data.v !== PLACES_VER || (data.m || 0) < PLACE_NEAR_M || (data.mo || 0) < PLACE_MATCH_M;
-            if (stale && data && data.items && !force) { // 예전 저장본(100m 이내만)은 일단 그대로 보여 주고, 뒤에서 500m 범위로 새로 받는다
-                route._places = matchPlaces(route.points, data.items); route._nearPeaks = []; route._placesState = 'ok';
+            const pts = route.points;
+            const apply = (items) => {
+                route._places = matchPlaces(pts, items);
+                route._nearPeaks = nearPeaks(pts, items, route._places);
+                route._placesState = 'ok';
                 if (currentRouteData === route) renderPlaces();
-            }
-            if (stale) {
+            };
+            const cells = routeCells(pts);
+            let items = [], have = new Set(), storeOk = true;
+            try {
+                const res = await Promise.all([storeGetPlaces(pts), force ? Promise.resolve(new Set()) : storeGetCells(cells)]);
+                items = res[0]; have = res[1];
+            } catch (e) { storeOk = false; route._placesErr = '저장소 오류: ' + (e && e.message ? e.message : e); }
+            const missing = force ? cells : cells.filter((k) => !have.has(k));
+            if (items.length || !missing.length) apply(items);
+            if (!missing.length) return;
+            // 예전 방식(경로별 저장본)이 있으면, 받는 동안 그것이라도 먼저 보여 준다
+            if (!items.length && route.id && !force) {
                 try {
-                    if (!partial) route._placesErr = '';
-                    if (currentRouteData === route) showToast('주요 지명을 불러오는 중… (처음 한 번, 10~30초)');
-                    const got = await fetchOverpassPlaces(route.points);
-                    const els = got.items;
-                    partial = got.failed > 0;
-                    if (partial) route._placesErr = `경로 ${got.total}구간 중 ${got.failed}구간의 지명을 받지 못했습니다 (${got.err})`;
-                    // 봉우리는 경로 500m 안, 그 외(대피소·고개·쉼터)는 100m 안의 것만 저장 (기준 거리를 바꿔도 다시 받을 필요가 없게)
-                    const stored = measurePlaces(route.points, els).filter((p) => p.d <= (p.k === 'peak' ? PLACE_NEAR_M : PLACE_OTHER_STORE_M));
-                    fetched = true;
-                    data = { v: PLACES_VER, m: PLACE_NEAR_M, mo: PLACE_OTHER_STORE_M, at: Date.now(), items: stored.map((p) => ({ n: p.n, k: p.k, e: p.e, lat: p.lat, lon: p.lon, d: p.d })) };
-                    if (route.id && !partial) { // 일부만 받았으면 저장하지 않아서 다음에 열 때 다시 시도한다
-                        try { await sbFetch(`gpx_tracks?id=eq.${route.id}`, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ places: data }) }); } catch (e) { /* 저장 실패해도 화면 표시는 한다 */ }
-                    }
-                } catch (e) {
-                    data = null;
-                    route._placesErr = e && e.message ? e.message : String(e);
-                    if (force) showToast('지명을 불러오지 못했습니다');
-                }
+                    const r = await sbFetch(`gpx_tracks?id=eq.${route.id}&select=places`);
+                    const old = (await r.json())[0];
+                    if (old && old.places && old.places.items && old.places.items.length) apply(old.places.items);
+                } catch (e) { /* 없어도 된다 */ }
             }
-            route.placesData = partial ? null : data; // 일부만 받은 것은 저장·재사용하지 않아서 다음에 다시 시도한다
-            route._places = data ? matchPlaces(route.points, data.items) : (route._places || []);
-            route._nearPeaks = data ? nearPeaks(route.points, data.items, route._places) : [];
-            route._placesState = data || (route._places && route._places.length) ? 'ok' : 'error';
+            if (currentRouteData === route) showToast(`주요 지명을 불러오는 중… (새 지역 ${missing.length}칸, 10~30초)`);
+            let got;
+            try { got = await fillCells(missing); }
+            catch (e) { got = { items: [], failed: 1, total: 1, err: e && e.message ? e.message : String(e), saveErr: '' }; }
+            items = dedupeItems(items.concat(got.items));
+            if (got.failed) route._placesErr = got.failed === got.total ? `지명을 받지 못했습니다 (${got.err})` : `새 지역 ${got.total}묶음 중 ${got.failed}묶음의 지명을 받지 못했습니다 (${got.err})`;
+            else if (got.saveErr || !storeOk) route._placesErr = '지명은 받았지만 저장소에 저장하지 못했습니다' + (got.saveErr ? ` (${got.saveErr})` : '');
+            if (items.length || got.failed < got.total) apply(items);
+            else { route._places = route._places || []; route._placesState = route._places.length ? 'ok' : 'error'; if (currentRouteData === route) renderPlaces(); }
             if (currentRouteData === route) {
-                renderPlaces();
-                if (fetched && partial) showToast('지명을 일부만 표시했습니다 (상세 화면에서 확인)');
-                else if (fetched) showToast(route._places.length ? `주요 지명 ${route._places.length}곳을 표시했습니다` : `경로 ${PLACE_MATCH_M} m 안에 지나간 지명이 없습니다`);
-                else if (data === null && !force) showToast('지명을 불러오지 못했습니다 (상세 화면에서 원인 확인)');
+                if (got.failed === got.total) showToast('지명을 불러오지 못했습니다 (상세 화면에서 원인 확인)');
+                else if (got.failed) showToast('지명을 일부만 표시했습니다 (상세 화면에서 확인)');
+                else showToast(route._places.length ? `주요 지명 ${route._places.length}곳을 표시했습니다` : `경로 ${PLACE_MATCH_M} m 안에 지나간 지명이 없습니다`);
             }
         }
         function reloadPlaces() { if (currentRouteData) loadPlaces(currentRouteData, true); }
@@ -1577,7 +1615,7 @@
                 const K = PLACE_KIND[p.k] || PLACE_KIND.peak, pt = route.points[p.i], tm = placeTimeText(p);
                 return `<div class="flex justify-between text-xs"><span><span style="color:${K.color}">${K.sym}</span> <span class="text-white">${placeEsc(p.n)}</span>${p.e != null ? ` <span class="text-gray-500">${p.e}m</span>` : ''}</span><span class="text-gray-400">${tm ? tm + ' · ' : ''}${((pt.cumDist || 0) / 1000).toFixed(1)}km</span></div>`;
             }).join('') + '</div>';
-            const warn = (st !== 'error' && route && route._placesErr) ? `<div class="text-[10px] text-amber-300/90 break-words mt-1">500 m 범위 지명(이름만 표시되는 봉우리)을 다 받지 못했습니다: ${placeEsc(route._placesErr)}</div>` : '';
+            const warn = (st !== 'error' && route && route._placesErr) ? `<div class="text-[10px] text-amber-300/90 break-words mt-1">${placeEsc(route._placesErr)}</div>` : '';
             box.innerHTML = `<div class="flex justify-between items-center mb-1"><span class="text-gray-300 font-bold">지나간 곳</span>${st === 'loading' ? '' : btn}</div>${body}${warn}<div class="text-[10px] text-gray-500 mt-1">봉우리·고개·대피소 (OpenStreetMap, 경로 ${PLACE_MATCH_M} m 이내)</div>`;
         }
         // 고도 그래프에 지명 표시 (drawGraph 에서 호출)

@@ -46,3 +46,38 @@ create policy "own rows" on public.gpx_waypoints2
 
 grant select, insert, update, delete on public.gpx_tracks     to authenticated;
 grant select, insert, update, delete on public.gpx_waypoints2 to authenticated;
+
+-- 주요 지명 공용 저장소: 여러 경로가 함께 쓴다 (OpenStreetMap Overpass에서 받은 봉우리·고개·대피소·쉼터)
+create table if not exists public.gpx_places (
+  user_id    uuid   not null default auth.uid() references auth.users(id) on delete cascade,
+  osm_key    text   not null,   -- 예: node123456
+  name       text   not null,
+  kind       text   not null,   -- peak / pass / hut / shelter
+  ele        integer,
+  lat        double precision not null,
+  lon        double precision not null,
+  updated_at bigint not null,
+  primary key (user_id, osm_key)
+);
+create index if not exists gpx_places_user_lat_lon on public.gpx_places (user_id, lat, lon);
+
+-- 지명을 이미 받아 둔 격자 칸 (위도 0.01° x 경도 0.0125°, 약 1.1km). 받은 칸은 다시 묻지 않는다.
+create table if not exists public.gpx_place_cells (
+  user_id    uuid   not null default auth.uid() references auth.users(id) on delete cascade,
+  cell       text   not null,
+  fetched_at bigint not null,
+  primary key (user_id, cell)
+);
+
+alter table public.gpx_places      enable row level security;
+alter table public.gpx_place_cells enable row level security;
+
+drop policy if exists "own rows" on public.gpx_places;
+create policy "own rows" on public.gpx_places
+  for all to authenticated
+  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+
+drop policy if exists "own rows" on public.gpx_place_cells;
+create policy "own rows" on public.gpx_place_cells
+  for all to authenticated
+  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
