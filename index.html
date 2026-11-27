@@ -356,7 +356,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.1.58';
+        const APP_VERSION = 'v0.1.59';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1282,7 +1282,7 @@
             hut:     { sym: '⌂', color: '#60a5fa', name: '대피소' },
             shelter: { sym: '⌂', color: '#93c5fd', name: '쉼터' }
         };
-        const PLACE_ICON_MIN_ZOOM = 11, PLACE_LABEL_MIN_ZOOM = 13;
+        const PLACE_ICON_MIN_ZOOM = 13, PLACE_LABEL_MIN_ZOOM = 13;
         const OVERPASS_URLS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
         const placeLayerGroup = L.layerGroup().addTo(map);
         const placeEsc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
