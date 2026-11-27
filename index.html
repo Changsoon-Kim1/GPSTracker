@@ -74,7 +74,8 @@
         .leaflet-container { -webkit-tap-highlight-color: transparent; }
 
         /* 줌 아웃 시 웨이포인트/마커 라벨 숨김 처리 */
-        .hide-wp-label .wp-label-text { 
+        .wp-hide .wp-mk { display: none !important; }
+        .hide-wp-label .wp-label-text {
             opacity: 0; 
             transform: scale(0.8);
             pointer-events: none; 
@@ -367,7 +368,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.2.1';
+        const APP_VERSION = 'v0.2.2';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -2356,6 +2357,8 @@
                 });
             }
             
+            // 웨이포인트도 지명과 같이 줌 12 이하에서는 아이콘·글씨 모두 숨김
+            document.getElementById('map').classList.toggle('wp-hide', z < PLACE_ICON_MIN_ZOOM);
             // 줌 레벨 14 미만일 때 라벨 숨김 (기존 16에서 14로 변경)
             if (z < 14) {
                 document.getElementById('map').classList.add('hide-wp-label');
