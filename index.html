@@ -366,7 +366,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.1.66';
+        const APP_VERSION = 'v0.1.67';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1483,10 +1483,28 @@
             await Promise.all([worker(), worker()]);
             return { items: got, failed, total: groups.length, err: errs[0] || '', saveErr };
         }
-        function dedupeItems(list) {
-            const seen = new Map();
-            list.forEach((it) => { const k = it.key || (it.n + '|' + it.lat.toFixed(4) + '|' + it.lon.toFixed(4)); if (!seen.has(k)) seen.set(k, it); });
-            return [...seen.values()];
+        // 이미 있는 지명과 이름이 같고 100m 안이면 같은 곳으로 보고 빼고, 새 것만 돌려준다 (지명은 누적: 지우지 않는다)
+        function mergeNew(have, incoming) {
+            const out = [], keys = new Set(have.map((h) => h.key));
+            const near = (a, b) => a.n === b.n && Math.hypot((a.lat - b.lat) * 111320, (a.lon - b.lon) * 111320 * Math.cos(a.lat * Math.PI / 180)) < 100;
+            incoming.forEach((it) => { if (!keys.has(it.key) && !have.some((h) => near(h, it)) && !out.some((o) => near(o, it))) { out.push(it); keys.add(it.key); } });
+            return out;
+        }
+        // "지우고 새로 받기": 이 경로 주변 칸의 지명과 받은 기록을 저장소에서 지운 뒤 다시 받는다
+        async function cleanPlaces() {
+            const route = currentRouteData;
+            if (!route || !route.points || route.points.length < 2) return;
+            if (!confirm('이 경로 주변(500m)의 저장된 지명을 모두 지우고 새로 받을까요?\n같은 지역을 지나는 다른 경로의 지명도 함께 바뀝니다.')) return;
+            const cells = routeCells(route.points);
+            try {
+                for (let i = 0; i < cells.length; i += 20) {
+                    const part = cells.slice(i, i + 20);
+                    const ors = part.map((k) => { const c = cellBounds(k); return `and(lat.gte.${c.s.toFixed(4)},lat.lt.${c.n.toFixed(4)},lon.gte.${c.w.toFixed(4)},lon.lt.${c.e.toFixed(4)})`; }).join(',');
+                    await sbFetch(`gpx_places?or=(${ors})`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+                    await sbFetch(`gpx_place_cells?cell=in.(${part.map((k) => `"${k}"`).join(',')})`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+                }
+            } catch (e) { showToast('지명 지우기 실패: ' + (e && e.message ? e.message : e)); return; }
+            loadPlaces(route, true);
         }
         // 지명마다 경로에서 가장 가까운 기록 점(i)과 거리(d, m)를 구한다
         function measurePlaces(pts, items) {
@@ -1531,27 +1549,32 @@
                 if (currentRouteData === route) renderPlaces();
             };
             const cells = routeCells(pts);
-            let items = [], have = new Set(), storeOk = true;
+            let items = [], have = new Set(), storeOk = true, old = null;
             try {
-                const res = await Promise.all([storeGetPlaces(pts), force ? Promise.resolve(new Set()) : storeGetCells(cells)]);
-                items = res[0]; have = res[1];
+                const res = await Promise.all([
+                    storeGetPlaces(pts),
+                    force ? Promise.resolve(new Set()) : storeGetCells(cells),
+                    route.id ? sbFetch(`gpx_tracks?id=eq.${route.id}&select=places`).then((r) => r.json()).then((rows) => rows[0] && rows[0].places).catch(() => null) : Promise.resolve(null)
+                ]);
+                items = res[0]; have = res[1]; old = res[2];
             } catch (e) { storeOk = false; route._placesErr = '저장소 오류: ' + (e && e.message ? e.message : e); }
+            // 예전 방식(경로별 저장본)의 지명도 버리지 않고 저장소에 합친다 (한 번만, 합친 뒤 경로별 저장본은 비운다)
+            if (storeOk && old && old.items && old.items.length) {
+                const add = mergeNew(items, old.items.map((it) => ({ key: `r:${it.n}|${(+it.lat).toFixed(5)}|${(+it.lon).toFixed(5)}`, n: it.n, k: it.k, e: it.e == null ? null : it.e, lat: +it.lat, lon: +it.lon })));
+                try {
+                    if (add.length) await storeSave(add, []);
+                    await sbFetch(`gpx_tracks?id=eq.${route.id}`, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ places: null }) });
+                } catch (e) { /* 다음에 다시 시도 */ }
+                items = items.concat(add);
+            }
             const missing = force ? cells : cells.filter((k) => !have.has(k));
             if (items.length || !missing.length) apply(items);
             if (!missing.length) return;
-            // 예전 방식(경로별 저장본)이 있으면, 받는 동안 그것이라도 먼저 보여 준다
-            if (!items.length && route.id && !force) {
-                try {
-                    const r = await sbFetch(`gpx_tracks?id=eq.${route.id}&select=places`);
-                    const old = (await r.json())[0];
-                    if (old && old.places && old.places.items && old.places.items.length) apply(old.places.items);
-                } catch (e) { /* 없어도 된다 */ }
-            }
             if (currentRouteData === route) showToast(`주요 지명을 불러오는 중… (새 지역 ${missing.length}칸, 10~30초)`);
             let got;
             try { got = await fillCells(missing); }
             catch (e) { got = { items: [], failed: 1, total: 1, err: e && e.message ? e.message : String(e), saveErr: '' }; }
-            items = dedupeItems(items.concat(got.items));
+            items = items.concat(mergeNew(items, got.items));
             if (got.failed) route._placesErr = got.failed === got.total ? `지명을 받지 못했습니다 (${got.err})` : `새 지역 ${got.total}묶음 중 ${got.failed}묶음의 지명을 받지 못했습니다 (${got.err})`;
             else if (got.saveErr || !storeOk) route._placesErr = '지명은 받았지만 저장소에 저장하지 못했습니다' + (got.saveErr ? ` (${got.saveErr})` : '');
             if (items.length || got.failed < got.total) apply(items);
@@ -1606,7 +1629,7 @@
             if (!box || !PLACES_ENABLED) return;
             const route = currentRouteData;
             const st = route && route._placesState;
-            const btn = `<button onclick="reloadPlaces()" class="text-[11px] text-sky-300 hover:text-sky-200 underline">다시 가져오기</button>`;
+            const btn = `<span class="space-x-3"><button onclick="reloadPlaces()" class="text-[11px] text-sky-300 hover:text-sky-200 underline" title="서버에 다시 물어 빠진 지명을 더한다 (있던 지명은 그대로)">더 가져오기</button><button onclick="cleanPlaces()" class="text-[11px] text-gray-400 hover:text-red-300 underline" title="이 경로 주변 지명을 지우고 새로 받는다">지우고 새로 받기</button></span>`;
             let body;
             if (st === 'loading') body = '<div class="text-xs text-gray-500">지명 불러오는 중…</div>';
             else if (st === 'error') body = `<div class="text-xs text-gray-500">지명을 불러오지 못했습니다.</div><div class="text-[10px] text-red-300/80 break-words">${placeEsc(route._placesErr || '')}</div>`;
