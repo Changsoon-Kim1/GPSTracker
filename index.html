@@ -397,7 +397,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.3.2';
+        const APP_VERSION = 'v0.3.3';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -570,7 +570,7 @@
                     icon: L.divIcon({
                         className: 'bg-transparent border-none', iconSize: [0, 0], iconAnchor: [0, 0],
                         html: `<div style="position:absolute;left:-7px;top:-7px;width:14px;height:14px;border-radius:50%;background:#22d3ee;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.6)"></div>
-                               <div style="position:absolute;left:0;top:-30px;transform:translateX(-50%);background:#0e7490;color:#fff;font-size:10px;font-weight:bold;padding:1px 5px;border-radius:4px;border:1px solid #fff;white-space:nowrap">${label}</div>`
+                               <div style="position:absolute;left:0;top:-30px;transform:translateX(-50%);background:rgba(14,116,144,0.35);color:#fff;font-size:10px;font-weight:bold;padding:1px 5px;border-radius:4px;border:1px solid rgba(255,255,255,0.35);white-space:nowrap;text-shadow:0 0 3px #000,0 0 3px #000">${label}</div>`
                     })
                 }).addTo(graphViewLayerGroup);
                 mk(pts[Math.min(pts.length - 1, graphLowerBound(pts, gV0))], '구간 시작');
