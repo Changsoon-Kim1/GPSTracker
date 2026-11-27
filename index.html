@@ -23,7 +23,7 @@
         .place-near { position: absolute; left: 0; top: -7px; transform: translateX(-50%); white-space: nowrap; font-size: 10px; font-weight: 600; color: #f3f4f6; text-shadow: 0 0 2px #111, 0 0 3px #111, 0 0 3px #111; pointer-events: none; }
         .places-near-hide .place-near { display: none; }
         .places-hide .place-mk { display: none; }
-        .wp-text { margin-left: 4px; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 0 2px #111, 0 0 3px #111, 0 0 4px #111; transition: opacity .3s; }
+        .wp-text { margin-left: 3px; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 0 2px #111, 0 0 3px #111, 0 0 4px #111; transition: opacity .3s; }
         .places-nolabel .place-label { display: none; }
         body, html { 
             margin: 0; padding: 0; 
@@ -367,7 +367,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.2.0';
+        const APP_VERSION = 'v0.2.1';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -2672,10 +2672,10 @@
         }
 
         function renderWaypoint(wp) {
-            // 지명(신선봉 등)처럼 글씨만 깔끔하게: 작은 분홍 점 + 흰 글씨(검은 그림자)
+            // 지명(신선봉 등)과 같은 ▲ 모양, 색만 붉은색 + 흰 글씨(검은 그림자)
             const iconHtml = `
-                <div class="wp-mk" style="position:absolute;left:-5px;top:-5px;display:flex;align-items:center;white-space:nowrap;cursor:pointer">
-                    <span style="width:10px;height:10px;border-radius:50%;background:#ec4899;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,.7);flex:none"></span>
+                <div class="wp-mk" style="position:absolute;left:-6px;top:-9px;display:flex;align-items:center;white-space:nowrap;cursor:pointer;color:#ef4444">
+                    <span class="place-sym">▲</span>
                     <span class="wp-label-text wp-text">${placeEsc(wp.name)}</span>
                 </div>
             `;
@@ -2930,8 +2930,8 @@
           let photoFiles = {};   // pid -> File (블로그용 내보내기에서 원본을 그대로 쓰기 위해 보관)
           let albumRoute = null; // 앨범을 만드는 경로(열려 있던 경로)
           let albumPlaces = [];  // 주요 지명 [{n, k, e, lat, lon, t}] (PLACES, 경로 위 가장 가까운 점 기준)
-          const PLACE_SYM = { peak: '▲', pass: '◆', hut: '⌂', shelter: '⌂', wp: '●' };
-          const PLACE_COL = { peak: '#b45309', pass: '#047857', hut: '#1d4ed8', shelter: '#2563eb', wp: '#db2777' };
+          const PLACE_SYM = { peak: '▲', pass: '◆', hut: '⌂', shelter: '⌂', wp: '▲' };
+          const PLACE_COL = { peak: '#b45309', pass: '#047857', hut: '#1d4ed8', shelter: '#2563eb', wp: '#dc2626' };
           // 장면 위치에서 150m 안의 가장 가까운 지명. 내가 직접 추가한 웨이포인트(own)가 있으면 그쪽을 먼저 쓴다.
           function nearPlace(loc) {
             let best = null, bd = 0.15, own = null, od = 0.15;
