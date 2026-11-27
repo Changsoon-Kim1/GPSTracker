@@ -356,7 +356,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.1.59';
+        const APP_VERSION = 'v0.1.60';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1274,7 +1274,7 @@
         // 한 번 받은 결과는 gpx_tracks.places 에 저장해 두고 다시 쓴다.
         const PLACES_ENABLED = true;
         let graphNoPan = false; // 지명 표시 때문에 그래프를 다시 그릴 때는 지도를 옮기지 않는다
-        const PLACE_MATCH_M = 100;
+        const PLACE_MATCH_M = 50;
         const PLACES_VER = 1;
         const PLACE_KIND = {
             peak:    { sym: '▲', color: '#fbbf24', name: '봉우리' },
@@ -1358,7 +1358,7 @@
             if (!data && !force && route.id) {
                 try { const r = await sbFetch(`gpx_tracks?id=eq.${route.id}&select=places`); const rows = await r.json(); data = rows[0] && rows[0].places || null; } catch (e) { data = null; }
             }
-            if (!data || data.v !== PLACES_VER || data.m !== PLACE_MATCH_M) {
+            if (!data || data.v !== PLACES_VER || data.m < PLACE_MATCH_M) { // 저장본이 더 넓은 반경(예: 100m)으로 걸러 둔 것이면 다시 받지 않고 여기서 좁혀서 쓴다
                 try {
                     if (currentRouteData === route) showToast('주요 지명을 불러오는 중… (처음 한 번, 10~30초)');
                     const els = await fetchOverpassPlaces(route.points);
