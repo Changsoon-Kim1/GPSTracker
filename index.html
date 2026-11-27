@@ -397,7 +397,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.3.3';
+        const APP_VERSION = 'v0.3.4';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -1774,8 +1774,9 @@
         }
         // 앨범 만들기에서 호출: 위치를 아는 사진만 저장. 반환: 저장한 장수
         async function saveRoutePhotos(routeId, photos, progress) {
-            if (routeId == null) return 0;
+            if (routeId == null) return { n: 0, noLoc: 0, fail: 0, err: '경로 ID 없음' };
             const items = [];
+            let fail = 0, lastErr = '';
             const list = photos.filter(p => p.file && p.loc && p.loc.how !== 'none' && p.loc.lat != null);
             for (let i = 0; i < list.length; i++) {
                 const p = list[i];
@@ -1783,11 +1784,11 @@
                 try {
                     const b = await makePhotoBlobs(p.file);
                     items.push({ name: p.name, t: p.tAdj != null ? p.tAdj : null, lat: p.loc.lat, lon: p.loc.lon, view: b.view, icon: b.icon, w: b.w, h: b.h });
-                } catch (e) { /* 읽을 수 없는 사진은 건너뜀 */ }
+                } catch (e) { fail++; lastErr = (e && e.message) || String(e); }
             }
             await photoStoreReplace(routeId, items);
             if (currentRouteData && String(currentRouteData.id) === String(routeId)) loadRoutePhotos(currentRouteData);
-            return items.length;
+            return { n: items.length, noLoc: photos.length - list.length, fail, err: lastErr };
         }
 
         // ---- 지도 표시 ----
@@ -3728,8 +3729,12 @@
               if (route.id != null && typeof saveRoutePhotos === 'function') {
                 const doneText = prog.textContent;
                 try {
-                  const n = await saveRoutePhotos(route.id, photos, (t) => { prog.textContent = t; });
-                  prog.textContent = doneText + (n ? ' · 지도 사진 ' + n + '장 저장' : '');
+                  const r = await saveRoutePhotos(route.id, photos, (t) => { prog.textContent = t; });
+                  let msg = ' · 지도 사진 ' + r.n + '장 저장';
+                  if (r.noLoc) msg += ' (위치 모름 ' + r.noLoc + '장 제외)';
+                  if (r.fail) msg += ' (읽기 실패 ' + r.fail + '장: ' + r.err + ')';
+                  prog.textContent = doneText + msg;
+                  if (!r.n) { err.textContent = '지도에 올릴 사진이 없어 카메라 버튼이 생기지 않았어요.' + (r.noLoc ? ' 위치를 확인한 사진이 없어요.' : '') + (r.fail ? ' 사진 변환 실패: ' + r.err : '') + (r.err && !r.fail ? ' ' + r.err : ''); err.hidden = false; }
                 } catch (e) { prog.textContent = doneText + ' · 지도 사진 저장 실패(' + (e && e.message || e) + ')'; }
               }
             } catch (e) { err.textContent = '리포트를 만들지 못했어요: ' + (e && e.message || e); err.hidden = false; }
