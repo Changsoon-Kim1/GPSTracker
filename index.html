@@ -397,7 +397,7 @@
 
     <script>
         // 앱 버전: 지도 왼쪽 아래와 앨범 위쪽에 표시 (바꿀 때는 여기 한 곳만)
-        const APP_VERSION = 'v0.3.8';
+        const APP_VERSION = 'v0.3.9';
         ['app-version', 'al-ver'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = APP_VERSION; });
         const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 13);
 
@@ -3404,7 +3404,7 @@
 
           // ---- 장면별 작은 지도: 전체 지도를 자르지 않고, 장면 위치 주변만 지명이 읽히는 수준(z15)으로 따로 만든다 ----
           // 가로로 긴 종주 경로에서도 지명이 나오게 하려는 것. 1 단위 = 타일 원본 1픽셀(z15에서 가로 240px ≈ 약 0.9km).
-          const MINI = { W: 240, H: 180, Z: 15, F: 1.5 };
+          const MINI = { W: 240, H: 180, Z: 14, F: 1.5 };
           const tileCache = new Map();
           function cachedTile(kind, z, x, y) { // 가까운 장면끼리 같은 타일을 다시 받지 않는다
             const k = kind + '/' + z + '/' + x + '/' + y;
